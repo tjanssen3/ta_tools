@@ -1,0 +1,8 @@
+Repos/*
+submissions/*
+students_full.txt
+student_records.json
+student_aliases.json
+report_*.txt
+*.pyc
+.idea/*
