@@ -12,6 +12,7 @@ Example:
 '''
 
 class TestSubmissions(TestCase):
+    # student list files should consist of GT IDs, separated by newlines
     def get_students_list_from_file(self, filename='students.txt'):
         students = []
         try:
@@ -84,5 +85,13 @@ class TestSubmissions(TestCase):
         assignment = "Assignment 3_ Basic Java coding & JUnit"
         report_name = "report_A3_test.txt"
         students = None # removed list of student names for public submission
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students)
+
+    def test_generate_A3_report_individual(self):
+        deadline = "2017-05-27 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Assignment 3_ Basic Java coding & JUnit"
+        report_name = "report_A3_travis_students.txt"
+        students = self.get_students_list_from_file('students_A3.txt')
 
         self.generate_report_for_assignment(assignment, deadline, report_name, students)

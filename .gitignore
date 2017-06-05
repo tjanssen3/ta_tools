@@ -6,3 +6,4 @@ student_aliases.json
 report_*.txt
 *.pyc
 .idea/*
+students*.txt
