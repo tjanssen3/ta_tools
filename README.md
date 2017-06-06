@@ -11,6 +11,10 @@ This will download GitHub repos for students in bulk, parse through submission t
 # Initial Setup
 1) Clone this repo to your machine
 2) Download the student info from Google Drive; extract to this folder (git will ignore those files)
+3) Optional: you may want to set your GitHub credentials to last longer so you only have to enter them once. Here's a way to do that from the command line (timeout is in seconds): 
+```
+    git config --global credential.helper "cache --timeout=300"
+```
 
 # Workflow
 1) Download the 'student submission text' submissions from T-Square in bulk
@@ -43,7 +47,7 @@ Create a new function like this in test_submissions.py:
 
 Run it from the command line like this:
 ```
-python -m unittest test_submissions.TestSubmissions.test_generate_A3_report
+    python -m unittest test_submissions.TestSubmissions.test_generate_A3_report_individual
 ```
 
 # Issues
