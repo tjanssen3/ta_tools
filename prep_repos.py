@@ -57,6 +57,11 @@ class Submissions:
                 students = json.load(student_records_file)
 
                 for folder in os.listdir(submission_folder_name):
+
+                    # Check for hidden .DS_Store file in MacOS
+                    if str(folder) == ".DS_Store":
+                        continue    
+
                     parsed = folder.split('(')
                     name = parsed[0]
                     t_square_id = parsed[1].strip(')')
