@@ -185,6 +185,7 @@ class Submissions:
             late_github = []
             late_t_square = []
             missing = []
+            bad_commit = []
 
             file_object = None
             
@@ -213,11 +214,15 @@ class Submissions:
                     if key == 'commitID' and student_info[assignment][key] == 'Missing':
                         missing.append(student)
 
+                    if key == 'commitID valid' and student_info[assignment][key] == False:
+                        bad_commit.append(student)
+
             self.print_to_file_and_console('\nLATE SUBMISSIONS:', file_object)
             self.print_to_file_and_console('\tT-Square (%s): ' % len(late_t_square) + ', '.join(sorted(late_t_square)), file_object)
             self.print_to_file_and_console('\tGitHub (%s): ' % len(late_github) + ', '.join(sorted(late_github)), file_object)
             self.print_to_file_and_console('\nMISSING SUBMISSIONS (%s):' % len(missing), file_object)
             self.print_to_file_and_console('\t' + ', '.join(sorted(missing)), file_object)
+            self.print_to_file_and_console('BAD COMMITS (%s):\n\t' % len(bad_commit) + ', '.join(sorted(bad_commit)), file_object)
 
             if file_object != None:
                 file_object.close()
