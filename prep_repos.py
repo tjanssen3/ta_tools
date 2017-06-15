@@ -127,6 +127,7 @@ class Submissions:
 
                         if not current_student[assignment_alias]['commitID valid']:
                             current_student[assignment_alias]['Submission GitHub'] = 'N/A'
+                            current_student[assignment_alias]['Timestamp GitHub'] = 'N/A'
                         else:
                             # check timestamp of GitHub commit
                             command_timestamp = "cd Repos/" + self.folder_prefix + current_student['gt_id'] + "; git show -s --format=%ci " + current_student[assignment_alias]['commitID'] + "; cd -"
@@ -202,7 +203,7 @@ class Submissions:
                     missing.append(student)
                     continue
 
-                for key in student_info[assignment].keys():
+                for key in reversed(sorted(student_info[assignment].keys())):
                     self.print_to_file_and_console('\t%s: %s' % (key, student_info[assignment][key]), file_object)
 
                     if key == 'Submission GitHub' and student_info[assignment][key] == 'late':
@@ -222,7 +223,7 @@ class Submissions:
             self.print_to_file_and_console('\tGitHub (%s): ' % len(late_github) + ', '.join(sorted(late_github)), file_object)
             self.print_to_file_and_console('\nMISSING SUBMISSIONS (%s):' % len(missing), file_object)
             self.print_to_file_and_console('\t' + ', '.join(sorted(missing)), file_object)
-            self.print_to_file_and_console('BAD COMMITS (%s):\n\t' % len(bad_commit) + ', '.join(sorted(bad_commit)), file_object)
+            self.print_to_file_and_console('\nBAD COMMITS (%s):\n\t' % len(bad_commit) + ', '.join(sorted(bad_commit)), file_object)
 
             if file_object != None:
                 file_object.close()
