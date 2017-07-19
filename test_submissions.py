@@ -24,10 +24,11 @@ class TestSubmissions(TestCase):
 
         return students
 
-    def generate_report_for_assignment(self, assignment, deadline, report_name, students=[], submissions=None):
+    def generate_report_for_assignment(self, assignment, deadline, report_name, students=[], submissions=None, pull_from_github=True):
         if submissions == None:
             submissions = prep_repos.Submissions()
 
+        submissions.pull_from_github = pull_from_github
         submissions.prep_repos("./submissions/%s" % assignment, deadline, students)
         submissions.generate_report(assignment, students, report_name)
 
@@ -95,3 +96,35 @@ class TestSubmissions(TestCase):
         students = self.get_students_list_from_file('students_A3.txt')
 
         self.generate_report_for_assignment(assignment, deadline, report_name, students)
+
+    def test_generate_A6_report_individual(self):
+        deadline = "2017-07-02 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Assignment 6_ Category-Partition"
+        report_name = "report_A6_travis_students.txt"
+        students = self.get_students_list_from_file('students_A6.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students)
+
+    def test_generate_A7_individual(self):
+        deadline = "2017-07-09 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Assignment 7_ White-Box Testing"
+        report_name = "report_A7_travis_students.txt"
+        students = self.get_students_list_from_file('students_A7.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students)
+
+    def test_generate_A7_report_individual(self):
+        submissions = prep_repos.Submissions()
+        assignment = "Assignment 7_ White-Box Testing"
+        report_name = "report_A7_travis_students.txt"
+        students = self.get_students_list_from_file('students_A7.txt')
+
+        submissions.generate_report(assignment, students, report_name)
+
+    def test_generate_A7_individual_test(self):
+        deadline = "2017-07-01 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Assignment 7_ White-Box Testing"
+        report_name = "report_A7_travis_students_test.txt"
+        students = self.get_students_list_from_file('students_A7.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, pull_from_github=False)

@@ -11,6 +11,7 @@ class Submissions:
         self.student_records_filename = "student_records.json"
         self.student_alias_filename = "student_aliases.json"
         self.datetime_format = "%Y-%m-%d %H:%M:%S"
+        self.pull_from_github = True
 
     def create_student_json(self, input_file_name):
         try:
@@ -78,87 +79,26 @@ class Submissions:
                     current_student[assignment_alias] = {}
 
                     # get submission text
-                    try:
-                        submission_file = "%s(%s)_submissionText.html" % (current_student['name'], t_square_id)
-                        with open(os.path.join(submission_folder_name, folder, submission_file), 'r') as submission_info:
-                            strings = re.findall(r'([0-9A-Za-z]{40})', submission_info.read())
-                            if len(strings) == 0:
-                                current_student[assignment_alias]['commitID'] = "Invalid"
-                            else:
-                                current_student[assignment_alias]['commitID'] = strings[0] # tiebreak: use first in list
-                    except IOError:
-                        current_student[assignment_alias]['commitID'] = "Missing"
+                    current_student = self.check_submission_file(current_student, t_square_id, submission_folder_name, folder, assignment_alias)
 
                     # get t-square timestamp
-                    try:
-                        timestamp_file = "timestamp.txt"
-                        with open(os.path.join(submission_folder_name, folder, timestamp_file), 'r') as timestamp_info:
-                            timestamp = timestamp_info.read()
-                            current_student[assignment_alias]['Timestamp T-Square'] = timestamp
-                    except IOError:
-                        current_student[assignment_alias]['Timestamp T-Square'] = "Missing"
-                        current_student[assignment_alias]['commitID'] = "Missing"
+                    current_student = self.check_timestamp_file(current_student, submission_folder_name, folder, assignment_alias)
 
                     # clone repo if needed - note that you'll need to authenticate with github here; debugger may not work properly
-                    if not os.path.isdir("./Repos/%s%s" % (self.folder_prefix, current_student['gt_id'])):
-                        command = "cd Repos; git clone https://github.gatech.edu/%s/%s%s.git; cd .." % (self.git_context, self.folder_prefix, current_student['gt_id'])
-                        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=None, shell=True)
-                        output = process.communicate()[0]
-
-                    # revert any local changes and pull from remote
-                    try:
-                        command_clear = "cd Repos/%s%s; git clean -fd; git reset --hard HEAD; git checkout .; git pull;" % (self.folder_prefix, current_student['gt_id'])
-                        output_clear = subprocess.check_output(command_clear, shell=True)
-                    except subprocess.CalledProcessError, e:
-                        print '%s subprocess.CalledProcessError:' % (current_student['gt_id'])
-                        try:
-                            print str(e.output)
-                        except UnicodeDecodeError:
-                            print 'UnicodeDecodeError'
+                    self.setup_student_repo(current_student)
 
                     # only check commit ID validity and GitHub timestamp on valid commits
                     if self.commit_id_present(current_student[assignment_alias]['commitID']):
                         # try to check out commit ID
-                        command_checkout = "cd Repos/" + self.folder_prefix + current_student['gt_id'] + ";" + "git checkout " + current_student[assignment_alias]['commitID'] + "; git log --pretty=format:'%H' -n 1; cd -"
-                        output_checkout = subprocess.check_output(command_checkout, shell=True)
+                        current_student = self.check_commit_ID(current_student, assignment_alias)
 
-                        commit = output_checkout.split('/')[0]
-                        current_student[assignment_alias]['commitID valid'] = commit == current_student[assignment_alias]['commitID']
-
-                        if not current_student[assignment_alias]['commitID valid']:
-                            current_student[assignment_alias]['Submission GitHub'] = 'N/A'
-                            current_student[assignment_alias]['Timestamp GitHub'] = 'N/A'
-                        else:
-                            # check timestamp of GitHub commit
-                            command_timestamp = "cd Repos/" + self.folder_prefix + current_student['gt_id'] + "; git show -s --format=%ci " + current_student[assignment_alias]['commitID'] + "; cd -"
-                            output_timestamp = subprocess.check_output(command_timestamp, shell=True)
-
-                            timestamp_full = output_timestamp.split('/')[0].split(' ')
-                            timestamp_github_raw = (timestamp_full[0] + " " + timestamp_full[1])
-                            timezone_raw = timestamp_full[2].strip()
-                            timezone = int(int(timezone_raw) * -1)/100
-
-                            dt_object = datetime.datetime.strptime(timestamp_github_raw, self.datetime_format)
-                            dt_final = dt_object + datetime.timedelta(hours=timezone)
-                            timestamp_github = dt_final.strftime(self.datetime_format)
-
-                            # check GitHub timestamp against deadline
-                            current_student[assignment_alias]['Timestamp GitHub'] = timestamp_github
-                            if timestamp_github < deadline:
-                                current_student[assignment_alias]['Submission GitHub'] = 'ok'
-                            else:
-                                current_student[assignment_alias]['Submission GitHub'] = 'late'
+                        current_student = self.check_timestamp_github(current_student, assignment_alias, deadline)
 
                     # check T-Square timestamp against deadline
-                    if current_student[assignment_alias]['Timestamp T-Square'] != 'Missing':
-                        temp = current_student[assignment_alias]['Timestamp T-Square']
-                        timestamp_t_square = temp[0:4] + '-' + temp[4:6] + '-' + temp[6:8] + ' ' \
-                                             + temp[8:10] + ':' + temp[10:12] + ':' + temp[12:14]
-                        current_student[assignment_alias]['Timestamp T-Square'] = timestamp_t_square
-                        if timestamp_t_square <= deadline:
-                            current_student[assignment_alias]['Submission T-Square'] = 'ok'
-                        else:
-                            current_student[assignment_alias]['Submission T-Square'] = 'late'
+                    current_student = self.check_timestamp_t_square(current_student, assignment_alias, deadline)
+
+                    # save info
+                    students[t_square_id] = current_student
 
             if students != None:
                 # save info
@@ -168,6 +108,102 @@ class Submissions:
         except IOError:
             print 'prep_repos couldn\'t find student records file. Run create_student_json first.'
             raise IOError
+
+    def check_submission_file(self, current_student, t_square_id, submission_folder_name, folder, assignment_alias):
+        try:
+            submission_file = "%s(%s)_submissionText.html" % (current_student['name'], t_square_id)
+            with open(os.path.join(submission_folder_name, folder, submission_file), 'r') as submission_info:
+                strings = re.findall(r'([0-9A-Za-z]{40})', submission_info.read())
+                if len(strings) == 0:
+                    current_student[assignment_alias]['commitID'] = "Invalid"
+                else:
+                    current_student[assignment_alias]['commitID'] = strings[0]  # tiebreak: use first in list
+        except IOError:
+            current_student[assignment_alias]['commitID'] = "Missing"
+
+        return current_student
+
+    def check_timestamp_file(self, current_student, submission_folder_name, folder, assignment_alias):
+        try:
+            timestamp_file = "timestamp.txt"
+            with open(os.path.join(submission_folder_name, folder, timestamp_file), 'r') as timestamp_info:
+                timestamp = timestamp_info.read()
+                current_student[assignment_alias]['Timestamp T-Square'] = timestamp
+        except IOError:
+            current_student[assignment_alias]['Timestamp T-Square'] = "Missing"
+            current_student[assignment_alias]['commitID'] = "Missing"
+        return current_student
+
+    def setup_student_repo(self, current_student):
+        if not os.path.isdir("./Repos/%s%s" % (self.folder_prefix, current_student['gt_id'])):
+            command = "cd Repos; git clone https://github.gatech.edu/%s/%s%s.git; cd .." % (
+            self.git_context, self.folder_prefix, current_student['gt_id'])
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=None, shell=True)
+            output = process.communicate()[0]
+
+        # revert any local changes and pull from remote
+        try:
+            if self.pull_from_github:
+                command_clear = "cd Repos/%s%s; git clean -fd; git reset --hard HEAD; git checkout .; git pull;" % (
+                self.folder_prefix, current_student['gt_id'])
+                output_clear = subprocess.check_output(command_clear, shell=True)
+        except subprocess.CalledProcessError, e:
+            print '%s subprocess.CalledProcessError:' % (current_student['gt_id'])
+            try:
+                print str(e.output)
+            except UnicodeDecodeError:
+                print 'UnicodeDecodeError'
+
+    def check_timestamp_github(self, current_student, assignment_alias, deadline):
+        if not current_student[assignment_alias]['commitID valid']:
+            current_student[assignment_alias]['Submission GitHub'] = 'N/A'
+            current_student[assignment_alias]['Timestamp GitHub'] = 'N/A'
+        else:
+            # check timestamp of GitHub commit
+            command_timestamp = "cd Repos/" + self.folder_prefix + current_student[
+                'gt_id'] + "; git show -s --format=%ci " + current_student[assignment_alias]['commitID'] + "; cd -"
+            output_timestamp = subprocess.check_output(command_timestamp, shell=True)
+
+            timestamp_full = output_timestamp.split('/')[0].split(' ')
+            timestamp_github_raw = (timestamp_full[0] + " " + timestamp_full[1])
+            timezone_raw = timestamp_full[2].strip()
+            timezone = int(int(timezone_raw) * -1) / 100
+
+            dt_object = datetime.datetime.strptime(timestamp_github_raw, self.datetime_format)
+            dt_final = dt_object + datetime.timedelta(hours=timezone)
+            timestamp_github = dt_final.strftime(self.datetime_format)
+
+            # check GitHub timestamp against deadline
+            current_student[assignment_alias]['Timestamp GitHub'] = timestamp_github
+            if timestamp_github < deadline:
+                current_student[assignment_alias]['Submission GitHub'] = 'ok'
+            else:
+                current_student[assignment_alias]['Submission GitHub'] = 'late'
+
+        return current_student
+
+    def check_timestamp_t_square(self, current_student, assignment_alias, deadline):
+        if current_student[assignment_alias]['Timestamp T-Square'] != 'Missing':
+            temp = current_student[assignment_alias]['Timestamp T-Square']
+            timestamp_t_square = temp[0:4] + '-' + temp[4:6] + '-' + temp[6:8] + ' ' \
+                                 + temp[8:10] + ':' + temp[10:12] + ':' + temp[12:14]
+            current_student[assignment_alias]['Timestamp T-Square'] = timestamp_t_square
+            if timestamp_t_square <= deadline:
+                current_student[assignment_alias]['Submission T-Square'] = 'ok'
+            else:
+                current_student[assignment_alias]['Submission T-Square'] = 'late'
+
+        return current_student
+
+    def check_commit_ID(self, current_student, assignment_alias):
+        command_checkout = "cd Repos/" + self.folder_prefix + current_student['gt_id'] + ";" + "git checkout " + \
+                           current_student[assignment_alias]['commitID'] + "; git log --pretty=format:'%H' -n 1; cd -"
+        output_checkout = subprocess.check_output(command_checkout, shell=True)
+
+        commit = output_checkout.split('/')[0]
+        current_student[assignment_alias]['commitID valid'] = commit == current_student[assignment_alias]['commitID']
+
+        return current_student
 
     def generate_report(self, assignment, students=[], report_name=None):
         print 'Report: %s\n' % assignment
