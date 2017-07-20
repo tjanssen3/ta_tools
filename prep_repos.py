@@ -15,6 +15,7 @@ class Submissions:
         self.datetime_format = "%Y-%m-%d %H:%M:%S"
         self.pull_from_github = True
         self._temp = {}  # cache some dictionary info here to save on IO operations
+        self._pulled_teams = []  # don't pull team repos up to 4x if you can avoid it
 
     def create_student_json(self, input_file_name):
         try:
@@ -84,7 +85,8 @@ class Submissions:
             print "Submission folder name '%s' not found. Exiting" % submission_folder_name
             return
 
-        teams = self.get_dictionary_from_json_file(self.team_records_filename)
+        if is_team_project:
+            teams = self.get_dictionary_from_json_file(self.team_records_filename)
 
         try:
             students = None
@@ -232,18 +234,25 @@ class Submissions:
         else:
             repo_suffix = current_student['gt_id']
 
-        if not os.path.isdir("./Repos/%s%s" % (self.folder_prefix, current_student['gt_id'])):
+        if not os.path.isdir("./Repos/%s%s" % (self.folder_prefix, repo_suffix)):
             command = "cd Repos; git clone https://github.gatech.edu/%s/%s%s.git; cd .." % (
             self.git_context, self.folder_prefix, repo_suffix)
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=None, shell=True)
             output = process.communicate()[0]
+
+            if is_team_project:
+                self._pulled_teams.append(repo_suffix)  # just do this once
+
+            just_cloned_repo = True
+        else:
+            just_cloned_repo = False
 
         # revert any local changes and pull from remote
         try:
                 command_setup = "cd Repos/%s%s; git clean -fd; git reset --hard HEAD; git checkout .;" % (
                 self.folder_prefix, repo_suffix)
 
-                if self.pull_from_github:
+                if self.pull_from_github and (not self.has_pulled_repo_for_team(is_team_project, repo_suffix) or just_cloned_repo):
                     command_setup += "git pull;"
 
                 output_clear = subprocess.check_output(command_setup, shell=True)
@@ -315,7 +324,18 @@ class Submissions:
 
         return current_student
 
-    def generate_report(self, assignment, students=[], report_name=None):
+    def has_pulled_repo_for_team(self, is_team_project, team_number):
+        has_already_pulled = False
+
+        if is_team_project:
+            if team_number in self._pulled_teams:
+                has_already_pulled = True
+            else:
+                self._pulled_teams.append(team_number)
+
+        return has_already_pulled
+
+    def generate_report(self, assignment, students=[], report_name=None, is_team_project=False):
         print 'Report: %s\n' % assignment
         try:
             student_aliases = None  # scope
@@ -339,7 +359,20 @@ class Submissions:
             if report_name != None:
                 file_object = open(report_name, 'w')
 
+            if is_team_project:
+                teams = self.get_dictionary_from_json_file(self.team_members_filename)
+                full_list = []
+                for team in students:
+                    members = teams[team]
+                    full_list.append(team)
+                    full_list += members
+                students = full_list
+
             for student in students:
+                if is_team_project and "Team" in student:
+                    print "\n========== %s ==========" % student
+                    continue
+
                 t_square_id = student_aliases[student]
                 student_info = student_records[t_square_id]
 

@@ -30,7 +30,7 @@ class TestSubmissions(TestCase):
 
         submissions.pull_from_github = pull_from_github
         submissions.prep_repos("./submissions/%s" % assignment, deadline, students, is_team_project=is_team_project)
-        submissions.generate_report(assignment, students, report_name)
+        submissions.generate_report(assignment, students, report_name, is_team_project=is_team_project)
 
         return submissions
 
@@ -155,4 +155,4 @@ class TestSubmissions(TestCase):
         report_name = "report_group_D0_travis_students_test.txt"
         students = self.get_students_list_from_file('students_group_project_teams.txt')
 
-        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True)
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True, pull_from_github=False)
