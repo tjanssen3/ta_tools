@@ -10,8 +10,11 @@ class Submissions:
         self.git_context = "gt-omscs-se-2017summer"
         self.student_records_filename = "student_records.json"
         self.student_alias_filename = "student_aliases.json"
+        self.team_records_filename = "student_records_teams.json"
+        self.team_members_filename = "student_records_team_members.json"
         self.datetime_format = "%Y-%m-%d %H:%M:%S"
         self.pull_from_github = True
+        self._temp = {}  # cache some dictionary info here to save on IO operations
 
     def create_student_json(self, input_file_name):
         try:
@@ -38,11 +41,41 @@ class Submissions:
             with open(self.student_alias_filename, 'w') as alias_file:
                 json.dump(gt_ids, alias_file)
         except IOError:
-            print 'create_student_json: couldn\'t find file with name %s. Exiting.'
+            print 'create_student_json: couldn\'t find file with name %s. Exiting.' % input_file_name
             raise IOError
 
-    def prep_repos(self, submission_folder_name, deadline, whitelist=None):
-        assignment_alias = submission_folder_name.split('/')[len(submission_folder_name.split('/')) - 1]
+    def create_team_json(self, input_file_name):
+        try:
+            with open(input_file_name, 'r') as input_file:
+                students = {}  # what team is a student in?
+                teams = {}  # what students are in a team?
+                for line in input_file:
+                    line = line.strip()
+                    parsed = line.split('\t')
+
+                    student = parsed[0]
+                    try:
+                        team = parsed[2]
+                    except IndexError:
+                        team = "None"
+
+                    students[student] = team
+                    if team not in teams:
+                        teams[team] = []
+                    teams[team].append(student)
+
+            # save here
+            with open(self.team_records_filename, 'w') as student_teams_file:
+                json.dump(students, student_teams_file)
+            with open(self.team_members_filename, 'w') as team_members_file:
+                json.dump(teams, team_members_file)
+
+        except IOError:
+            print "create_team_json couldn\'t find file with name %s" % input_file_name
+            raise IOError
+
+    def prep_repos(self, submission_folder_name, deadline, whitelist=None, is_team_project=False):
+        assignment_alias = self.get_assignment_alias(submission_folder_name)
 
         if not os.path.isdir("Repos"):
             os.makedirs("Repos")
@@ -51,17 +84,23 @@ class Submissions:
             print "Submission folder name '%s' not found. Exiting" % submission_folder_name
             return
 
+        teams = self.get_dictionary_from_json_file(self.team_records_filename)
+
         try:
             students = None
 
             with open(self.student_records_filename, 'r+') as student_records_file:
                 students = json.load(student_records_file)
 
-                for folder in os.listdir(submission_folder_name):
+                if whitelist == None:
+                    folders = os.listdir(submission_folder_name)
+                else:
+                    folders = self.get_student_folder_names_from_list(whitelist, is_team_project)
 
+                for folder in folders:
                     # Check for hidden .DS_Store file in MacOS
                     if str(folder) == ".DS_Store":
-                        continue    
+                        continue
 
                     parsed = folder.split('(')
                     name = parsed[0]
@@ -72,7 +111,7 @@ class Submissions:
                     except KeyError:  # also pulls in TAs, who won't be in students records file
                         continue
 
-                    if whitelist != None and current_student['gt_id'] not in whitelist:
+                    if (whitelist != None and not is_team_project and current_student['gt_id'] not in whitelist) or (whitelist != None and is_team_project and teams[current_student['gt_id']] not in whitelist):
                         continue
 
                     # reset info for current assignment
@@ -85,14 +124,14 @@ class Submissions:
                     current_student = self.check_timestamp_file(current_student, submission_folder_name, folder, assignment_alias)
 
                     # clone repo if needed - note that you'll need to authenticate with github here; debugger may not work properly
-                    self.setup_student_repo(current_student)
+                    self.setup_student_repo(current_student, is_team_project)
 
                     # only check commit ID validity and GitHub timestamp on valid commits
                     if self.commit_id_present(current_student[assignment_alias]['commitID']):
                         # try to check out commit ID
-                        current_student = self.check_commit_ID(current_student, assignment_alias)
+                        current_student = self.check_commit_ID(current_student, assignment_alias, is_team_project)
 
-                        current_student = self.check_timestamp_github(current_student, assignment_alias, deadline)
+                        current_student = self.check_timestamp_github(current_student, assignment_alias, deadline, is_team_project)
 
                     # check T-Square timestamp against deadline
                     current_student = self.check_timestamp_t_square(current_student, assignment_alias, deadline)
@@ -108,6 +147,59 @@ class Submissions:
         except IOError:
             print 'prep_repos couldn\'t find student records file. Run create_student_json first.'
             raise IOError
+
+    def get_student_team(self, student_gt_id):
+        teams = self.get_dictionary_from_json_file(self.team_records_filename)
+
+        try:
+            team = teams[student_gt_id]
+        except IndexError:
+            print 'Couldn\'t find team for student with GTID %s' % student_gt_id
+            raise IndexError
+
+        return team
+
+    def get_dictionary_from_json_file(self, file_name):
+        info = {}
+        if file_name not in self._temp.keys():
+            try:
+                with open(file_name, 'r') as my_file:
+                    info = json.load(my_file)
+                    self._temp[file_name] = info
+            except IOError:
+                print 'Couldn\'t open file with name %s' % file_name
+        else:
+            info = self._temp[file_name]
+
+        return info
+
+    def get_assignment_alias(self, submission_folder_name):
+        return submission_folder_name.split('/')[len(submission_folder_name.split('/')) - 1]
+
+    def get_student_folder_names_from_list(self, whitelist, is_team_project):
+        folders = []
+        if is_team_project:
+            teams = self.get_dictionary_from_json_file(self.team_members_filename)
+            whitelist_teams = []
+            for team in whitelist:
+                group = teams[team]
+                whitelist_teams += group
+            whitelist = whitelist_teams  # now contains student GTIDs instead of just team names
+
+        t_square_aliases = self.get_dictionary_from_json_file(self.student_alias_filename)
+        student_info = self.get_dictionary_from_json_file(self.student_records_filename)
+
+        for student in whitelist:
+            try:
+                t_square_id = t_square_aliases[student]
+                name = student_info[t_square_id]['name']
+            except IndexError:
+                print 'Couldn\'t get folder name for student with GTID %s' % student
+
+            folder_name = "%s(%s)" % (name, t_square_id)
+            folders.append(folder_name)
+
+        return folders
 
     def check_submission_file(self, current_student, t_square_id, submission_folder_name, folder, assignment_alias):
         try:
@@ -134,17 +226,22 @@ class Submissions:
             current_student[assignment_alias]['commitID'] = "Missing"
         return current_student
 
-    def setup_student_repo(self, current_student):
+    def setup_student_repo(self, current_student, is_team_project=False):
+        if is_team_project:
+            repo_suffix = self.get_student_team(current_student['gt_id'])
+        else:
+            repo_suffix = current_student['gt_id']
+
         if not os.path.isdir("./Repos/%s%s" % (self.folder_prefix, current_student['gt_id'])):
             command = "cd Repos; git clone https://github.gatech.edu/%s/%s%s.git; cd .." % (
-            self.git_context, self.folder_prefix, current_student['gt_id'])
+            self.git_context, self.folder_prefix, repo_suffix)
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=None, shell=True)
             output = process.communicate()[0]
 
         # revert any local changes and pull from remote
         try:
                 command_setup = "cd Repos/%s%s; git clean -fd; git reset --hard HEAD; git checkout .;" % (
-                self.folder_prefix, current_student['gt_id'])
+                self.folder_prefix, repo_suffix)
 
                 if self.pull_from_github:
                     command_setup += "git pull;"
@@ -157,14 +254,19 @@ class Submissions:
             except UnicodeDecodeError:
                 print 'UnicodeDecodeError'
 
-    def check_timestamp_github(self, current_student, assignment_alias, deadline):
+    def check_timestamp_github(self, current_student, assignment_alias, deadline, is_team_project=False):
         if not current_student[assignment_alias]['commitID valid']:
             current_student[assignment_alias]['Submission GitHub'] = 'N/A'
             current_student[assignment_alias]['Timestamp GitHub'] = 'N/A'
         else:
+            if is_team_project:
+                repo_suffix = self.get_student_team(current_student['gt_id'])
+            else:
+                repo_suffix = current_student['gt_id']
+
             # check timestamp of GitHub commit
-            command_timestamp = "cd Repos/" + self.folder_prefix + current_student[
-                'gt_id'] + "; git show -s --format=%ci " + current_student[assignment_alias]['commitID'] + "; cd -"
+            command_timestamp = "cd Repos/" + self.folder_prefix + repo_suffix + "; git show -s --format=%ci " + \
+                                current_student[assignment_alias]['commitID'] + "; cd -"
             output_timestamp = subprocess.check_output(command_timestamp, shell=True)
 
             timestamp_full = output_timestamp.split('/')[0].split(' ')
@@ -198,8 +300,13 @@ class Submissions:
 
         return current_student
 
-    def check_commit_ID(self, current_student, assignment_alias):
-        command_checkout = "cd Repos/" + self.folder_prefix + current_student['gt_id'] + ";" + "git checkout " + \
+    def check_commit_ID(self, current_student, assignment_alias, is_team_project):
+        if is_team_project:
+            repo_suffix = self.get_student_team(current_student['gt_id'])
+        else:
+            repo_suffix = current_student['gt_id']
+
+        command_checkout = "cd Repos/" + self.folder_prefix + repo_suffix + ";" + "git checkout " + \
                            current_student[assignment_alias]['commitID'] + "; git log --pretty=format:'%H' -n 1; cd -"
         output_checkout = subprocess.check_output(command_checkout, shell=True)
 
