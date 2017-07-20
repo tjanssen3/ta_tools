@@ -143,10 +143,13 @@ class Submissions:
 
         # revert any local changes and pull from remote
         try:
-            if self.pull_from_github:
-                command_clear = "cd Repos/%s%s; git clean -fd; git reset --hard HEAD; git checkout .; git pull;" % (
+                command_setup = "cd Repos/%s%s; git clean -fd; git reset --hard HEAD; git checkout .;" % (
                 self.folder_prefix, current_student['gt_id'])
-                output_clear = subprocess.check_output(command_clear, shell=True)
+
+                if self.pull_from_github:
+                    command_setup += "git pull;"
+
+                output_clear = subprocess.check_output(command_setup, shell=True)
         except subprocess.CalledProcessError, e:
             print '%s subprocess.CalledProcessError:' % (current_student['gt_id'])
             try:
