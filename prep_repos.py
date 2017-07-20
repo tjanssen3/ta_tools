@@ -146,6 +146,40 @@ class Submissions:
                 with open(self.student_records_filename, 'w') as output_file:
                     json.dump(students, output_file)
 
+            # check out most recent commit
+            if is_team_project and whitelist != None:
+                teams = self.get_dictionary_from_json_file(self.team_members_filename)
+                aliases = self.get_dictionary_from_json_file(self.student_alias_filename)
+                for team in whitelist:
+                    members = teams[team]
+                    commits = []
+                    for student in members:
+                        t_square_id = aliases[student]
+                        student_info = students[t_square_id]
+
+                        try:
+                            commit_time = student_info[assignment_alias]['Timestamp GitHub']
+                            commit_ID = student_info[assignment_alias]['commitID']
+                        except KeyError:
+                            continue
+
+                        if self.commit_id_present(commit_ID) and commit_time != 'N/A':
+                            commits.append((commit_time, commit_ID))
+
+                    commits.sort(reverse=True) # most recent should be first
+                    most_recent_commit_time, most_recent_commit = commits[0]
+
+                    # checkout most recent commit here
+                    if len(commits) > 0:
+                        try:
+                            command_checkout = "cd Repos/%s%s; git checkout %s;" % (self.folder_prefix, team, most_recent_commit)
+                            output_checkout = subprocess.check_output(command_checkout, shell=True)
+                        except subprocess.CalledProcessError:
+                            raise subprocess.CalledProcessError
+                    else:
+                        print 'NO VALID COMMITS FOR %s!' % team
+                    pass
+
         except IOError:
             print 'prep_repos couldn\'t find student records file. Run create_student_json first.'
             raise IOError
