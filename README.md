@@ -8,6 +8,10 @@ This will download GitHub repos for students in bulk, parse through submission t
 3) Student data from Google Drive: students_full.txt, student_records.json, student_aliases.json
 4) Recommended: Pycharm IDE
 
+### Dependencies: Group Projects
+1) All information listed in the Dependencies section above
+2) Team data from Google Drive: student_teams.txt, student_records_team_members.json, student_record_teams.json
+
 # Initial Setup
 1) Clone this repo to your machine
 2) Download the student info from Google Drive; extract to this folder (git will ignore those files)
@@ -48,6 +52,44 @@ Create a new function like this in test_submissions.py:
 Run it from the command line like this:
 ```
     python -m unittest test_submissions.TestSubmissions.test_generate_A3_report_individual
+```
+
+# Group Projects
+ta_tools supports group projects, which takes in a list of teams as input, rather than student GT usernames, and will process submissions based on a single repo for each group. The setup is identical to assignment except for the input data, but you need to specify one extra parameter in your prep_repos call: set is_team_project=True. Here's an example:
+
+``` 
+    submissions.prep_repos("./submissions/%s" % assignment, deadline, students, is_team_project=True)
+```
+Full example, with convenience function:
+``` 
+    def test_generate_D0_report(self):
+        deadline = "2017-06-17 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Group Project, Deliverable 0"
+        report_name = "report_group_D0_travis_students.txt"
+        students = self.get_students_list_from_file('students_group_project_teams.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True)
+```
+
+Here's an example of what your report_group_D0_students.txt file contents might look like (shortened for convenience):
+``` 
+Team05
+Team19
+```
+
+Reports will be separated by team for convenience, and still print late, missing and 
+
+# Options
+prep_repos also supports opting out of pulling from GitHub, which speeds up processing older assignments. Just set the argument pull_from_github=False in your prep_repos class, like this:
+
+``` 
+    submissions = prep_repos.Submissions()
+    submissions.pull_from_github = False
+```
+
+Or use the convenience function like this:
+``` 
+    self.generate_report_for_assignment(assignment, deadline, report_name, students, pull_from_github=False)
 ```
 
 # Issues

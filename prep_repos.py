@@ -404,7 +404,7 @@ class Submissions:
 
             for student in students:
                 if is_team_project and "Team" in student:
-                    print "\n========== %s ==========" % student
+                    self.print_to_file_and_console("\n========== %s ==========" % student, file_object)
                     continue
 
                 t_square_id = student_aliases[student]
