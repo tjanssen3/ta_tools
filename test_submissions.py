@@ -120,7 +120,7 @@ class TestSubmissions(TestCase):
     def test_generate_A7_individual(self):
         deadline = "2017-07-09 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
         assignment = "Assignment 7_ White-Box Testing"
-        report_name = "report_A7_travis_students.txt"
+        report_name = "report_A7_travis_students_updated.txt"
         students = self.get_students_list_from_file('students_A7.txt')
 
         self.generate_report_for_assignment(assignment, deadline, report_name, students)
@@ -145,7 +145,7 @@ class TestSubmissions(TestCase):
         deadline = "2017-06-17 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
         assignment = "Group Project, Deliverable 0"
         report_name = "report_group_D0_travis_students.txt"
-        students = self.get_students_list_from_file('students_group_D0.txt')
+        students = self.get_students_list_from_file('students_group_project_teams.txt')
 
         self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True)
 
