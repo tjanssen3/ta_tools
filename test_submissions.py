@@ -147,12 +147,44 @@ class TestSubmissions(TestCase):
         report_name = "report_group_D0_travis_students.txt"
         students = self.get_students_list_from_file('students_group_project_teams.txt')
 
-        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True, pull_from_github=False)
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True)
 
     def test_generate_D0_test(self):
         deadline = "2017-06-17 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
         assignment = "Group Project, Deliverable 0"
         report_name = "report_group_D0_travis_students_test.txt"
+        students = self.get_students_list_from_file('students_group_project_teams.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True, pull_from_github=False)
+
+    def test_generate_D1_report(self):
+        deadline = "2017-06-24 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Group Project, Deliverable 1"
+        report_name = "report_group_D1_travis_students.txt"
+        students = self.get_students_list_from_file('students_group_project_teams.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True, pull_from_github=False)
+
+    def test_generate_D2_report(self):
+        deadline = "2017-07-01 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Group Project, Deliverable 2"
+        report_name = "report_group_D2_travis_students.txt"
+        students = self.get_students_list_from_file('students_group_project_teams.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True, pull_from_github=False)
+
+    def test_generate_D3_report(self):
+        deadline = "2017-07-08 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Group Project, Deliverable 3"
+        report_name = "report_group_D3_travis_students.txt"
+        students = self.get_students_list_from_file('students_group_project_teams.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True, pull_from_github=False)
+
+    def test_generate_D4_report(self):
+        deadline = "2017-07-15 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Group Project, Deliverable 4"
+        report_name = "report_group_D4_travis_students.txt"
         students = self.get_students_list_from_file('students_group_project_teams.txt')
 
         self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True, pull_from_github=False)
