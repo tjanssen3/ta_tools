@@ -278,7 +278,7 @@ class Submissions:
 
         # revert any local changes and pull from remote
         try:
-                command_setup = "cd Repos/%s%s; git clean -fd; git reset --hard HEAD; git checkout .;" % (
+                command_setup = "cd Repos/%s%s && git clean -fd && git reset --hard HEAD && git checkout .;" % (
                 self.folder_prefix, repo_suffix)
 
                 if self.pull_from_github and (not self.has_pulled_repo_for_team(is_team_project, repo_suffix) or just_cloned_repo):
