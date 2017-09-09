@@ -6,8 +6,8 @@ import subprocess
 
 class Submissions:
     def __init__(self):
-        self.folder_prefix = "6300Summer17"
-        self.git_context = "gt-omscs-se-2017summer"
+        self.folder_prefix = "6300Fall17"
+        self.git_context = "gt-omscs-se-2017fall"
         self.student_records_filename = "student_records.json"
         self.student_alias_filename = "student_aliases.json"
         self.team_records_filename = "student_records_teams.json"
@@ -42,8 +42,7 @@ class Submissions:
             with open(self.student_alias_filename, 'w') as alias_file:
                 json.dump(gt_ids, alias_file)
         except IOError:
-            print 'create_student_json: couldn\'t find file with name %s. Exiting.' % input_file_name
-            raise IOError
+            raise IOError('create_student_json: couldn\'t find file with name %s. Exiting.' % input_file_name)
 
     def create_team_json(self, input_file_name):
         try:
@@ -72,8 +71,7 @@ class Submissions:
                 json.dump(teams, team_members_file)
 
         except IOError:
-            print "create_team_json couldn\'t find file with name %s" % input_file_name
-            raise IOError
+            raise IOError("create_team_json couldn\'t find file with name %s" % input_file_name)
 
     def prep_repos(self, submission_folder_name, deadline, whitelist=None, is_team_project=False):
         assignment_alias = self.get_assignment_alias(submission_folder_name)
@@ -82,8 +80,7 @@ class Submissions:
             os.makedirs("Repos")
 
         if not os.path.isdir(submission_folder_name):
-            print "Submission folder name '%s' not found. Exiting" % submission_folder_name
-            return
+            raise IOError("Submission folder name '%s' not found. Exiting." % submission_folder_name)
 
         if is_team_project:
             teams = self.get_dictionary_from_json_file(self.team_records_filename)
@@ -181,8 +178,7 @@ class Submissions:
                     pass
 
         except IOError:
-            print 'prep_repos couldn\'t find student records file. Run create_student_json first.'
-            raise IOError
+            raise IOError('prep_repos couldn\'t find student records file. Run create_student_json first.')
 
     def get_student_team(self, student_gt_id):
         teams = self.get_dictionary_from_json_file(self.team_records_filename)
@@ -190,8 +186,7 @@ class Submissions:
         try:
             team = teams[student_gt_id]
         except IndexError:
-            print 'Couldn\'t find team for student with GTID %s' % student_gt_id
-            raise IndexError
+            raise IndexError('Couldn\'t find team for student with GTID %s' % student_gt_id)
 
         return team
 
@@ -389,7 +384,7 @@ class Submissions:
             bad_commit = []
 
             file_object = None
-            
+
             if report_name != None:
                 file_object = open(report_name, 'w')
 
@@ -403,6 +398,9 @@ class Submissions:
                 students = full_list
 
             for student in students:
+                if student == '':  # ignore whitespace/blank lines
+                    continue
+
                 if is_team_project and "Team" in student:
                     self.print_to_file_and_console("\n========== %s ==========" % student, file_object)
                     continue
