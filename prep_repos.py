@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import platform
 
 class Submissions:
     def __init__(self):
@@ -170,7 +171,7 @@ class Submissions:
                     if len(commits) > 0:
                         try:
                             command_checkout = "cd Repos/%s%s; git checkout %s;" % (self.folder_prefix, team, most_recent_commit)
-                            output_checkout = subprocess.check_output(command_checkout, shell=True)
+                            output_checkout = self.get_command_output(command_checkout)
                         except subprocess.CalledProcessError:
                             raise subprocess.CalledProcessError
                     else:
@@ -266,8 +267,7 @@ class Submissions:
         if not os.path.isdir("./Repos/%s%s" % (self.folder_prefix, repo_suffix)):
             command = "cd Repos; git clone https://github.gatech.edu/%s/%s%s.git; cd .." % (
             self.git_context, self.folder_prefix, repo_suffix)
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=None, shell=True)
-            output = process.communicate()[0]
+            output = self.get_command_output(command)
 
             if is_team_project:
                 self._pulled_teams.append(repo_suffix)  # just do this once
@@ -284,7 +284,7 @@ class Submissions:
                 if self.pull_from_github and (not self.has_pulled_repo_for_team(is_team_project, repo_suffix) or just_cloned_repo):
                     command_setup += "git pull;"
 
-                output_clear = subprocess.check_output(command_setup, shell=True)
+                output_clear = self.get_command_output(command_setup)
         except subprocess.CalledProcessError, e:
             print '%s subprocess.CalledProcessError:' % (current_student['gt_id'])
             try:
@@ -305,7 +305,7 @@ class Submissions:
             # check timestamp of GitHub commit
             command_timestamp = "cd Repos/" + self.folder_prefix + repo_suffix + "; git show -s --format=%ci " + \
                                 current_student[assignment_alias]['commitID'] + "; cd -"
-            output_timestamp = subprocess.check_output(command_timestamp, shell=True)
+            output_timestamp = self.get_command_output(command_timestamp)
 
             timestamp_full = output_timestamp.split('/')[0].split(' ')
             timestamp_github_raw = (timestamp_full[0] + " " + timestamp_full[1])
@@ -346,7 +346,7 @@ class Submissions:
 
         command_checkout = "cd Repos/" + self.folder_prefix + repo_suffix + ";" + "git checkout " + \
                            current_student[assignment_alias]['commitID'] + "; git log --pretty=format:'%H' -n 1; cd -"
-        output_checkout = subprocess.check_output(command_checkout, shell=True)
+        output_checkout = self.get_command_output(command_checkout)
 
         commit = output_checkout.split('/')[0]
         current_student[assignment_alias]['commitID valid'] = commit == current_student[assignment_alias]['commitID']
@@ -363,6 +363,15 @@ class Submissions:
                 self._pulled_teams.append(team_number)
 
         return has_already_pulled
+
+    def get_command_output(self, command):
+        my_system = platform.system()
+        if my_system == 'win32':
+            command = command.replace(';', '&')
+
+        output = subprocess.check_output(command, shell=True)
+
+        return output
 
     def generate_report(self, assignment, students=[], report_name=None, is_team_project=False):
         print 'Report: %s\n' % assignment
