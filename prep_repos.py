@@ -348,7 +348,11 @@ class Submissions:
                            current_student[assignment_alias]['commitID'] + "; git log --pretty=format:'%H' -n 1; cd -"
         output_checkout = self.get_command_output(command_checkout)
 
-        commit = output_checkout.split('/')[0]
+        if platform.system() == "Windows":
+            commit = output_checkout[1:len(output_checkout)-1]  # windows returns \\ prefix and suffix
+        else:
+            commit = output_checkout.split('/')[0]
+
         current_student[assignment_alias]['commitID valid'] = commit == current_student[assignment_alias]['commitID']
 
         return current_student
@@ -366,8 +370,9 @@ class Submissions:
 
     def get_command_output(self, command):
         my_system = platform.system()
-        if my_system == 'win32':
-            command = command.replace(';', '&')
+        if my_system == 'Windows':
+            command = command.replace(';', '&')  # windows chains commands with &, linux/macOS with ;
+            command = command.replace('& cd -', '')  # windows doesn't support 'go back to last directory' with 'cd -', so remove it
 
         output = subprocess.check_output(command, shell=True)
 
