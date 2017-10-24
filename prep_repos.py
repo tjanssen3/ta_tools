@@ -165,7 +165,11 @@ class Submissions:
                             commits.append((commit_time, commit_ID))
 
                     commits.sort(reverse=True) # most recent should be first
-                    most_recent_commit_time, most_recent_commit = commits[0]
+                    try:
+                        most_recent_commit_time, most_recent_commit = commits[0]
+                    except IndexError:
+                        most_recent_commit = "None"
+                        most_recent_commit_time = "None"
 
                     # checkout most recent commit here
                     if len(commits) > 0:
