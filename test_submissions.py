@@ -86,11 +86,11 @@ class TestSubmissions(TestCase):
 
     def test_generate_A6_report_individual(self):
         deadline = "2017-10-28 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
-        assignment = "Assignment 6_ Category-Partition"
+        assignment = "Assignment 6_ Category partition"
         report_name = "report_A6_my_students.txt"
         students = self.get_students_list_from_file('students_A6.txt')
 
-        self.generate_report_for_assignment(assignment, deadline, report_name, students, pull_from_github=False)
+        self.generate_report_for_assignment(assignment, deadline, report_name, students)
 
     def test_generate_A7_report_individual(self):
         deadline = "2017-11-04 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
@@ -98,7 +98,7 @@ class TestSubmissions(TestCase):
         report_name = "report_A7_my_students.txt"
         students = self.get_students_list_from_file('students_A7.txt')
 
-        self.generate_report_for_assignment(assignment, deadline, report_name, students, pull_from_github=False)
+        self.generate_report_for_assignment(assignment, deadline, report_name, students)
 
     def test_generate_D0_report(self):
         deadline = "2017-09-23 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
