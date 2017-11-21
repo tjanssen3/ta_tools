@@ -23,7 +23,7 @@ class Submissions(object):
 
 
     def __init__(self):
-        self.folder_prefix = "6300Fall17"
+        self.FOLDER_PREFIX = "6300Fall17"
         self.git_context = "gt-omscs-se-2017fall"
         self.student_records_filename = "student_records.json"
         self.student_alias_filename = "student_aliases.json"
@@ -220,9 +220,7 @@ class Submissions(object):
                         try:
                             command_checkout = (
                               'cd %s; git checkout %s;' % (
-                                os.path.join(self.MAIN_REPO_DIR,
-                                             "%s%s" % (
-                                             self.folder_prefix, team)),
+                                self.gen_prefixed_dir(team),
                                 most_recent_commit))
 
                             _ = self.execute_command(command_checkout)
@@ -356,13 +354,11 @@ class Submissions(object):
             repo_suffix = current_student['gt_id']
 
 
-        if not os.path.isdir(os.path.join(
-          '.', self.MAIN_REPO_DIR, "%s%s" % (
-            self.folder_prefix, repo_suffix))):
+        if not os.path.isdir(self.gen_prefixed_dir(repo_suffix)):
 
             command = 'cd %s; git clone https://github.gatech.edu/%s/%s%s.git; cd ..' % (
               self.MAIN_REPO_DIR, self.git_context,
-              self.folder_prefix, repo_suffix)
+              self.FOLDER_PREFIX, repo_suffix)
             _ = self.execute_command(command)
 
             if is_team_project:
@@ -377,8 +373,7 @@ class Submissions(object):
         # revert any local changes and pull from remote
         try:
             command_setup = 'cd %s && git clean -fd && git reset --hard HEAD && git checkout .;' % (
-              os.path.join(self.MAIN_REPO_DIR, "%s%s" % (
-                self.folder_prefix, repo_suffix)))
+              self.gen_prefixed_dir(repo_suffix))
 
             if self.pull_from_github and (
               not self.has_pulled_repo_for_team(
@@ -415,7 +410,7 @@ class Submissions(object):
             # check timestamp of GitHub commit
             command_timestamp = (
               'cd %s; git show -s --format=%%ci %s; cd -' % (
-                os.path.join(self.MAIN_REPO_DIR, "%s%s" % (self.folder_prefix, repo_suffix)),
+                self.gen_prefixed_dir(repo_suffix),
                 current_student[assignment_alias]['commitID']))
 
             output_timestamp = self.execute_command(command_timestamp)
@@ -459,10 +454,8 @@ class Submissions(object):
 
         # CD First?
         command_checkout = ('cd %s; git checkout %s; git log --pretty=format:\'%%H\' -n 1; cd -' %
-                             (os.path.join(
-                               self.MAIN_REPO_DIR,
-                               "%s%s" % (self.folder_prefix, repo_suffix)),
-                              current_student[assignment_alias]['commitID']))
+                            (self.gen_prefixed_dir(repo_suffix),
+                             current_student[assignment_alias]['commitID']))
         output_checkout = self.execute_command(command_checkout)
 
         if self.OS_TYPE == 'Windows':
@@ -626,6 +619,25 @@ class Submissions(object):
             raise IOError(msg)
 
 
+    def gen_prefixed_dir(self, prefix_str):
+        """
+        This combines a directory prefix onto the valid directory,
+        to target a student's directory.
+
+        Arguments:
+          prefix_str:   (str) A valid student's prefix (be it a team number
+            or a student name) so we can access it.
+
+        Returns:
+          A valid directory that can be accessed.
+
+        """
+
+
+        return os.path.join(self.MAIN_REPO_DIR, "%s%s" %
+                            self.FOLDER_PREFIX, prefix_str)
+
+
     def is_commit_present(self, commit_status):
         """
         Checks if the commit statue message states if the commit is present.
@@ -669,6 +681,8 @@ def init_log(log_filename=None, log_file_mode='w', fmt_str=None):
     """
 
 
+    # Checking for Falsy doesn't work since "" and None are similar.
+    # None doesn't have a len
     if log_filename == "":
         log_filename = 'submission_runner.txt'
 
