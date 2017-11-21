@@ -1,6 +1,3 @@
-##!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from collections import defaultdict
 import datetime
 import json
 import os
@@ -8,12 +5,7 @@ import re
 import subprocess
 import platform
 
-import logging
-logger = logging.getLogger(__name__)
-
 class Submissions:
-
-
     def __init__(self):
         self.folder_prefix = "6300Fall17"
         self.git_context = "gt-omscs-se-2017fall"
@@ -23,66 +15,66 @@ class Submissions:
         self.team_members_filename = "student_records_team_members.json"
         self.datetime_format = "%Y-%m-%d %H:%M:%S"
         self.pull_from_github = True
-        self._temp = {}    # cache some dictionary info here to save on IO operations
-        self._pulled_teams = []    # don't pull team repos up to 4x if you can avoid it
-
+        self._temp = {}  # cache some dictionary info here to save on IO operations
+        self._pulled_teams = []  # don't pull team repos up to 4x if you can avoid it
 
     def create_student_json(self, input_file_name):
-
         try:
             with open(input_file_name, 'r') as input_file:
-
-                gt_id_dict, student_dict = {}, {}
-
-                for line in input_file:
-                    line = line.strip()
-                    parsed_line = line.split('\t')
-
-                    name, gt_id, t_square_id = parsed_line[0:3]
-
-                    student_dict[t_square_id] = {'name': name, 'gt_id': gt_id}
-                    gt_id_dict[gt_id] = t_square_id
-
-            # save here
-            with open(self.student_records_filename, 'w') as output_file:
-                json.dump(student_dict, output_file)
-            with open(self.student_alias_filename, 'w') as alias_file:
-                json.dump(gt_id_dict, alias_file)
-
-        except IOError:
-            raise IOError("create_student_json: couldn't find file with name %s. Exiting." % input_file_name)
-
-
-    def create_team_json(self, input_file_name):
-
-        try:
-
-            with open(input_file_name, 'r') as input_file:
-
-                student_dict, teams_dict = {}, defaultdict(list)
-
+                gt_ids = {}
+                students = {}
                 for line in input_file:
                     line = line.strip()
                     parsed = line.split('\t')
-                    parsed.extend(["None", "None"])
 
-                    student, _, team = parsed[0:3]
-                    student_dict[student] = team
-                    teams_dict[team].append(student)
+                    name = parsed[0]
+                    gt_id = parsed[1]
+                    t_square_id = parsed[2]
+
+                    students[t_square_id] = {}
+                    students[t_square_id]['name'] = name
+                    students[t_square_id]['gt_id'] = gt_id
+
+                    gt_ids[gt_id] = t_square_id
+
+            # save here
+            with open(self.student_records_filename, 'w') as output_file:
+                json.dump(students, output_file)
+            with open(self.student_alias_filename, 'w') as alias_file:
+                json.dump(gt_ids, alias_file)
+        except IOError:
+            raise IOError('create_student_json: couldn\'t find file with name %s. Exiting.' % input_file_name)
+
+    def create_team_json(self, input_file_name):
+        try:
+            with open(input_file_name, 'r') as input_file:
+                students = {}  # what team is a student in?
+                teams = {}  # what students are in a team?
+                for line in input_file:
+                    line = line.strip()
+                    parsed = line.split('\t')
+
+                    student = parsed[0]
+                    try:
+                        team = parsed[2]
+                    except IndexError:
+                        team = "None"
+
+                    students[student] = team
+                    if team not in teams:
+                        teams[team] = []
+                    teams[team].append(student)
 
             # save here
             with open(self.team_records_filename, 'w') as student_teams_file:
-                json.dump(student_dict, student_teams_file)
+                json.dump(students, student_teams_file)
             with open(self.team_members_filename, 'w') as team_members_file:
-                json.dump(teams_dict, team_members_file)
+                json.dump(teams, team_members_file)
 
         except IOError:
             raise IOError("create_team_json couldn\'t find file with name %s" % input_file_name)
 
-
-    def prep_repos(self, submission_folder_name, deadline,
-                                 whitelist=None, is_team_project=False):
-
+    def prep_repos(self, submission_folder_name, deadline, whitelist=None, is_team_project=False):
         assignment_alias = self.get_assignment_alias(submission_folder_name)
 
         if not os.path.isdir("Repos"):
@@ -98,26 +90,25 @@ class Submissions:
             students = None
 
             with open(self.student_records_filename, 'r+') as student_records_file:
-
                 students = json.load(student_records_file)
 
-                if whitelist is None:
+                if whitelist == None:
                     folders = os.listdir(submission_folder_name)
                 else:
                     folders = self.get_student_folder_names_from_list(whitelist, is_team_project)
 
                 for folder in folders:
-
                     # Check for hidden .DS_Store file in MacOS
                     if str(folder) == ".DS_Store":
                         continue
 
-                    parsed = folder.strip(')').split('(')
-                    name, t_square_id = parsed[0:2]
+                    parsed = folder.split('(')
+                    name = parsed[0]
+                    t_square_id = parsed[1].strip(')')
 
                     try:
                         current_student = students[t_square_id]
-                    except KeyError:    # also pulls in TAs, who won't be in students records file
+                    except KeyError:  # also pulls in TAs, who won't be in students records file
                         continue
 
                     if (whitelist != None and not is_team_project and current_student['gt_id'] not in whitelist) or (whitelist != None and is_team_project and teams[current_student['gt_id']] not in whitelist):
@@ -148,19 +139,18 @@ class Submissions:
                     # save info
                     students[t_square_id] = current_student
 
-            if students is not None:
+            if students != None:
                 # save info
                 with open(self.student_records_filename, 'w') as output_file:
                     json.dump(students, output_file)
 
             # check out most recent commit
-            if is_team_project and whitelist is not None:
+            if is_team_project and whitelist != None:
                 teams = self.get_dictionary_from_json_file(self.team_members_filename)
                 aliases = self.get_dictionary_from_json_file(self.student_alias_filename)
-
                 for team in whitelist:
-                    members, commits = teams[team], []
-
+                    members = teams[team]
+                    commits = []
                     for student in members:
                         t_square_id = aliases[student]
                         student_info = students[t_square_id]
@@ -196,7 +186,6 @@ class Submissions:
             raise IOError('prep_repos couldn\'t find student records file. Run create_student_json first.')
 
     def get_student_team(self, student_gt_id):
-
         teams = self.get_dictionary_from_json_file(self.team_records_filename)
 
         try:
@@ -207,7 +196,6 @@ class Submissions:
         return team
 
     def get_dictionary_from_json_file(self, file_name):
-
         info = {}
         if file_name not in self._temp.keys():
             try:
@@ -232,7 +220,7 @@ class Submissions:
             for team in whitelist:
                 group = teams[team]
                 whitelist_teams += group
-            whitelist = whitelist_teams    # now contains student GTIDs instead of just team names
+            whitelist = whitelist_teams  # now contains student GTIDs instead of just team names
 
         t_square_aliases = self.get_dictionary_from_json_file(self.student_alias_filename)
         student_info = self.get_dictionary_from_json_file(self.student_records_filename)
@@ -257,7 +245,7 @@ class Submissions:
                 if len(strings) == 0:
                     current_student[assignment_alias]['commitID'] = "Invalid"
                 else:
-                    current_student[assignment_alias]['commitID'] = strings[0]    # tiebreak: use first in list
+                    current_student[assignment_alias]['commitID'] = strings[0]  # tiebreak: use first in list
         except IOError:
             current_student[assignment_alias]['commitID'] = "Missing"
 
@@ -286,7 +274,7 @@ class Submissions:
             output = self.get_command_output(command)
 
             if is_team_project:
-                self._pulled_teams.append(repo_suffix)    # just do this once
+                self._pulled_teams.append(repo_suffix)  # just do this once
 
             just_cloned_repo = True
         else:
@@ -354,19 +342,18 @@ class Submissions:
 
         return current_student
 
-    # Hashed?
     def check_commit_ID(self, current_student, assignment_alias, is_team_project):
+        if is_team_project:
+            repo_suffix = self.get_student_team(current_student['gt_id'])
+        else:
+            repo_suffix = current_student['gt_id']
 
-        key = current_student['gt_id']
-        repo_suffix = self.get_student_team(key) if is_team_project else key
-
-        # CD First?
-        command_checkout = ("cd Repos/%s%s; git checkout %s; git log --pretty=format:'%%H' -n 1; cd -" %
-                             (self.folder_prefix, repo_suffix, current_student[assignment_alias]['commitID']))
+        command_checkout = "cd Repos/" + self.folder_prefix + repo_suffix + ";" + "git checkout " + \
+                           current_student[assignment_alias]['commitID'] + "; git log --pretty=format:'%H' -n 1; cd -"
         output_checkout = self.get_command_output(command_checkout)
 
         if platform.system() == "Windows":
-            commit = output_checkout[1:len(output_checkout)-1]    # windows returns \\ prefix and suffix
+            commit = output_checkout[1:len(output_checkout)-1]  # windows returns \\ prefix and suffix
         else:
             commit = output_checkout.split('/')[0]
 
@@ -375,7 +362,6 @@ class Submissions:
         return current_student
 
     def has_pulled_repo_for_team(self, is_team_project, team_number):
-
         has_already_pulled = False
 
         if is_team_project:
@@ -389,142 +375,95 @@ class Submissions:
     def get_command_output(self, command):
         my_system = platform.system()
         if my_system == 'Windows':
-            command = command.replace(';', '&')    # windows chains commands with &, linux/macOS with ;
-            command = command.replace('& cd -', '')    # windows doesn't support 'go back to last directory' with 'cd -', so remove it
+            command = command.replace(';', '&')  # windows chains commands with &, linux/macOS with ;
+            command = command.replace('& cd -', '')  # windows doesn't support 'go back to last directory' with 'cd -', so remove it
 
         output = subprocess.check_output(command, shell=True)
 
         return output
 
-    def generate_report(self, assignment, student_list=None,
-                                            report_name=None, is_team_project=False):
-
-        logger.info("Report: %s\n", assignment)
-
+    def generate_report(self, assignment, students=[], report_name=None, is_team_project=False):
+        print 'Report: %s\n' % assignment
         try:
-
-
-            student_aliases = None
+            student_aliases = None  # scope
             with open(self.student_alias_filename, 'r') as alias_file:
                 student_aliases = json.load(alias_file)
 
-            student_records = None
+            student_records = None  # scope
             with open(self.student_records_filename, 'r') as records_file:
                 student_records = json.load(records_file)
 
+            if students == None or len(students) == 0:
+                students = student_aliases.keys()  # all students!
 
-            bad_commit, late_github, late_t_square, missing = [], [], [], []
+            late_github = []
+            late_t_square = []
+            missing = []
+            bad_commit = []
 
-            init_log(log_name=report_name)
+            file_object = None
+
+            if report_name != None:
+                file_object = open(report_name, 'w')
 
             if is_team_project:
-
                 teams = self.get_dictionary_from_json_file(self.team_members_filename)
+                full_list = []
+                for team in students:
+                    members = teams[team]
+                    full_list.append(team)
+                    full_list += members
+                students = full_list
 
-                new_student_list = []
-
-                for team in student_list:
-                    members_list = teams[team]
-
-                    new_student_list.append(team)
-                    new_student_list.extend(members_list)
-
-                student_list = new_student_list
-
-            elif student_list is None or not student_list:
-                student_list = student_aliases.keys()    # all student_list!
-            else:
-                pass # Do nothing
-
-
-            for student in student_list:
-
-                if not student: # ignore whitespace/blank lines
+            for student in students:
+                if student == '':  # ignore whitespace/blank lines
                     continue
 
                 if is_team_project and "Team" in student:
-                    logger.info("\n========== %s ==========", student)
+                    self.print_to_file_and_console("\n========== %s ==========" % student, file_object)
                     continue
 
-                student_info = student_records[student_aliases[student]]
+                t_square_id = student_aliases[student]
+                student_info = student_records[t_square_id]
 
-                logger.info(student)
-
+                self.print_to_file_and_console(student, file_object)
                 if assignment not in student_info:
-
-                    logger.info('\tNo records found')
+                    self.print_to_file_and_console('\tNo records found', file_object)
                     missing.append(student)
                     continue
 
-                student_info_assignment = student_info[assignment]
-                for key in sorted(student_info_assignment.keys(), reverse=True):
+                for key in reversed(sorted(student_info[assignment].keys())):
+                    self.print_to_file_and_console('\t%s: %s' % (key, student_info[assignment][key]), file_object)
 
-                    student_info_assignment_key = student_info_assignment[key]
-                    logger.info('\t%s: %s', key, student_info_assignment_key)
-
-                    if key == 'Submission GitHub' and student_info_assignment_key == 'late':
+                    if key == 'Submission GitHub' and student_info[assignment][key] == 'late':
                         late_github.append(student)
 
-                    if key == 'Submission T-Square' and student_info_assignment_key == 'late':
+                    if key == 'Submission T-Square' and student_info[assignment][key] == 'late':
                         late_t_square.append(student)
 
-                    if key == 'commitID' and student_info_assignment_key == 'Missing':
+                    if key == 'commitID' and student_info[assignment][key] == 'Missing':
                         missing.append(student)
 
-                    if key == 'commitID valid' and student_info_assignment_key == False:
+                    if key == 'commitID valid' and student_info[assignment][key] == False:
                         bad_commit.append(student)
 
-            logger.info("\n========== RESULTS ==========")
-            str_buffer = []
-            str_buffer.append("\nLATE SUBMISSIONS:")
-            for fmt_str, data in [("\tT-Square (%d): %s", late_t_square),
-                                                        ("\tGitHub (%d): %s", late_github),
-                                                        ("\nMISSING SUBMISSIONS (%s): %s", missing),
-                                                        ("\nBAD COMMITS (%s):\n\t%s", bad_commit)]:
-                    str_buffer.append(fmt_str % (len(data), ", ".join(data)))
-            logger.info("\n".join(str_buffer))
+            self.print_to_file_and_console('\nLATE SUBMISSIONS:', file_object)
+            self.print_to_file_and_console('\tT-Square (%s): ' % len(late_t_square) + ', '.join(sorted(late_t_square)), file_object)
+            self.print_to_file_and_console('\tGitHub (%s): ' % len(late_github) + ', '.join(sorted(late_github)), file_object)
+            self.print_to_file_and_console('\nMISSING SUBMISSIONS (%s):' % len(missing), file_object)
+            self.print_to_file_and_console('\t' + ', '.join(sorted(missing)), file_object)
+            self.print_to_file_and_console('\nBAD COMMITS (%s):\n\t' % len(bad_commit) + ', '.join(sorted(bad_commit)), file_object)
 
+            if file_object != None:
+                file_object.close()
         except IOError:
-            msg = "generate_report couldn't find %s file. Try running create_student_json first." % self.student_alias_filename
-            print(msg)
-            raise IOError(msg)
+            print 'generate_report couldn\'t find %s file. Try running create_student_json first.' % self.student_alias_filename
+            raise IOError
 
+    def print_to_file_and_console(self, text, file_object):
+        print text
+        if file_object != None:
+            file_object.write(text + "\n")
 
     def commit_id_present(self, commitID_message):
         return commitID_message != 'Invalid' and commitID_message != 'Missing'
-
-
-def init_log(log_name=None, log_file_mode='w', fmt_str=None):
-    """
-    Initialize Logging
-
-    This should not be in a class as this is unique per file (program file).
-
-    This could be integrated by moving all logging commands but then all
-    log names need to be unique to prevent clobbering. The default action is
-    to append but set to overwrite since it is unlikely we need previous run info.
-    """
-
-
-    if log_name == "":
-        log_name = 'submission_runner.txt'
-
-    if fmt_str is None or not fmt_str:
-        fmt_str = "%(message)s"
-        #fmt_str="%(asctime)s - %(name)30s - %(levelname)10s : %(message)s"
-
-    fmt_str = logging.Formatter(fmt_str)
-
-    logger.setLevel(logging.DEBUG)
-
-    stdout = logging.StreamHandler()
-    stdout.setFormatter(fmt_str)
-    stdout.setLevel(logging.INFO)
-    logger.addHandler(stdout)
-
-    if log_name is not None:
-        fout = logging.FileHandler(filename=log_name, mode=log_file_mode)
-        fout.setFormatter(fmt_str)
-        fout.setLevel(logging.DEBUG)
-        logger.addHandler(fout)
-
