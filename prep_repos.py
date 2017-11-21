@@ -1,6 +1,14 @@
 ##!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+For the purposes of this file, we assume that a student is either a student
+or a team to make parsing easier, since most of the logic is identical.
+
+Created by Travis Janssen and David Tran
+"""
+
 from collections import defaultdict
+
 import datetime
 import json
 import os
@@ -28,8 +36,11 @@ class Submissions(object):
 
         self.MAIN_REPO_DIR = 'Repos'
 
+        # Stored to be used in later logic, so typos between copies don't exist
         self.STR_INVALID = "Invalid"
         self.STR_MISSING = "Missing"
+        self.STR_OK = "Ok"
+        self.STR_LATE = "Late"
         self.BAD_STR_LIST = [self.STR_INVALID, self.STR_MISSING]
 
         # Cache results
@@ -157,7 +168,7 @@ class Submissions(object):
                     self.setup_student_repo(current_student, is_team_project)
 
                     # only check commit ID validity and GitHub timestamp on valid commits
-                    if self.is_commit_id_present(current_student[assignment_alias]['commitID']):
+                    if self.is_commit_present(current_student[assignment_alias]['commitID']):
                         # try to check out commit ID
                         current_student = self.check_commit_ID(current_student, assignment_alias, is_team_project)
 
@@ -192,7 +203,7 @@ class Submissions(object):
                         except KeyError:
                             continue
 
-                        if self.is_commit_id_present(commit_ID) and commit_time != 'N/A':
+                        if self.is_commit_present(commit_ID) and commit_time != 'N/A':
                             commits.append((commit_time, commit_ID))
 
                     commits.sort(reverse=True) # most recent should be first
@@ -416,9 +427,9 @@ class Submissions(object):
             # check GitHub timestamp against deadline
             current_student[assignment_alias]['Timestamp GitHub'] = timestamp_github
             if timestamp_github < deadline:
-                current_student[assignment_alias]['Submission GitHub'] = 'ok'
+                current_student[assignment_alias]['Submission GitHub'] = self.STR_OK
             else:
-                current_student[assignment_alias]['Submission GitHub'] = 'late'
+                current_student[assignment_alias]['Submission GitHub'] = self.STR_LATE
 
         return current_student
 
@@ -429,9 +440,9 @@ class Submissions(object):
                                  + temp[8:10] + ':' + temp[10:12] + ':' + temp[12:14]
             current_student[assignment_alias]['Timestamp T-Square'] = timestamp_t_square
             if timestamp_t_square <= deadline:
-                current_student[assignment_alias]['Submission T-Square'] = 'ok'
+                current_student[assignment_alias]['Submission T-Square'] = self.STR_OK
             else:
-                current_student[assignment_alias]['Submission T-Square'] = 'late'
+                current_student[assignment_alias]['Submission T-Square'] = self.STR_LATE
 
         return current_student
 
@@ -474,15 +485,34 @@ class Submissions(object):
             command = command.replace(';', '&')    # windows chains commands with &, linux/macOS with ;
             command = command.replace('& cd -', '')    # windows doesn't support 'go back to last directory' with 'cd -', so remove it
 
-        output = subprocess.check_output(command, shell=True)
-
-        return output
+        return subprocess.check_output(command, shell=True)
 
     def generate_report(self, assignment, student_list=None,
-                        report_name=None, is_team_project=False):
+                        report_filename=None, is_team_project=False):
+        """
+        This general the final report that can be used by a grader.
+
+        The result is outputted to a file (report_filename) and to stdout.
+
+        Arguments:
+          assignment:   (str) This is the name of the assignment we are
+            comparing against.
+
+          student_list:   (list of str) This is a list of students that we
+            will analyze and prints the results.
+
+          report_filename:   (str) This is the filename of the report will generate,
+            in addition to stdout. To disable this feature, pass in None.
+
+          is_team_project:   (boolean) This tells the function if we are looking
+            at teams or students.
+
+        Returns:
+          A file, if set, with the results and the output to stdout.
         """
 
-        """
+
+        from code import interact; interact(local=dict(globals(), **locals()))
 
         try:
 
@@ -496,7 +526,7 @@ class Submissions(object):
 
             bad_commit, late_github, late_t_square, missing = [], [], [], []
 
-            init_log(log_name=report_name)
+            init_log(log_filename=report_filename)
             logger.info("Report: %s\n", assignment)
 
             if is_team_project:
@@ -576,13 +606,25 @@ class Submissions(object):
             raise IOError(msg)
 
 
-    def is_commit_id_present(self, commit_message):
-        return commit_message not in self.BAD_STR_LIST
+    def is_commit_present(self, commit_status):
+        """
+        Checks if the commit statue message states if the commit is present.
+
+        Arguments:
+          commit_status:   (str) The current commit status.
+
+        Returns:
+          True if it's not a bad commit or False if it is.
+
+        """
 
 
-def init_log(log_name=None, log_file_mode='w', fmt_str=None):
+        return commit_status not in self.BAD_STR_LIST
+
+
+def init_log(log_filename=None, log_file_mode='w', fmt_str=None):
     """
-    Initialize Logging
+    Initializes the logging for this file.
 
     This should not be in a class as this is unique per file (program file).
 
@@ -592,7 +634,7 @@ def init_log(log_name=None, log_file_mode='w', fmt_str=None):
     info.
 
     Arguments:
-      log_name:   (str) This is the log file name we are outputting to.
+      log_filename:   (str) This is the log file name we are outputting to.
         None will disable this and empty string will use the default name.
 
       log_file_mode:   (str) This sets the file bit for the output file.
@@ -607,8 +649,8 @@ def init_log(log_name=None, log_file_mode='w', fmt_str=None):
     """
 
 
-    if log_name == "":
-        log_name = 'submission_runner.txt'
+    if log_filename == "":
+        log_filename = 'submission_runner.txt'
 
     if fmt_str is None or not fmt_str:
         fmt_str = "%(message)s"
@@ -623,8 +665,8 @@ def init_log(log_name=None, log_file_mode='w', fmt_str=None):
     stdout.setLevel(logging.INFO)
     logger.addHandler(stdout)
 
-    if log_name is not None:
-        fout = logging.FileHandler(filename=log_name, mode=log_file_mode)
+    if log_filename is not None:
+        fout = logging.FileHandler(filename=log_filename, mode=log_file_mode)
         fout.setFormatter(fmt_str)
         fout.setLevel(logging.DEBUG)
         logger.addHandler(fout)
