@@ -219,12 +219,13 @@ class Submissions(object):
 
                         try:
                             command_checkout = (
-                              'cd %s/%s%s; git checkout %s;' % (
-                                self.MAIN_REPO_DIR,
-                                self.folder_prefix,
-                                team, most_recent_commit))
+                              'cd %s; git checkout %s;' % (
+                                os.path.join(self.MAIN_REPO_DIR,
+                                             "%s%s" % (
+                                             self.folder_prefix, team)),
+                                most_recent_commit))
 
-                            _ = self.get_command_output(command_checkout)
+                            _ = self.execute_command(command_checkout)
 
                         except subprocess.CalledProcessError:
                             raise subprocess.CalledProcessError
@@ -334,6 +335,7 @@ class Submissions(object):
 
         try:
             timestamp_file = "timestamp.txt"
+
             with open(os.path.join(submission_folder_name, folder, timestamp_file), 'r') as timestamp_info:
                 timestamp = timestamp_info.read()
                 current_student[assignment_alias]['Timestamp T-Square'] = timestamp
@@ -354,13 +356,14 @@ class Submissions(object):
             repo_suffix = current_student['gt_id']
 
 
-        if not os.path.isdir("./%s/%s%s" % (
-          self.MAIN_REPO_DIR, self.folder_prefix, repo_suffix)):
+        if not os.path.isdir(os.path.join(
+          '.', self.MAIN_REPO_DIR, "%s%s" % (
+            self.folder_prefix, repo_suffix))):
 
             command = 'cd %s; git clone https://github.gatech.edu/%s/%s%s.git; cd ..' % (
               self.MAIN_REPO_DIR, self.git_context,
               self.folder_prefix, repo_suffix)
-            _ = self.get_command_output(command)
+            _ = self.execute_command(command)
 
             if is_team_project:
                 self._pulled_teams.append(repo_suffix)  # just do this once
@@ -373,8 +376,9 @@ class Submissions(object):
 
         # revert any local changes and pull from remote
         try:
-            command_setup = 'cd %s/%s%s && git clean -fd && git reset --hard HEAD && git checkout .;' % (
-              self.MAIN_REPO_DIR, self.folder_prefix, repo_suffix)
+            command_setup = 'cd %s && git clean -fd && git reset --hard HEAD && git checkout .;' % (
+              os.path.join(self.MAIN_REPO_DIR, "%s%s" % (
+                self.folder_prefix, repo_suffix)))
 
             if self.pull_from_github and (
               not self.has_pulled_repo_for_team(
@@ -383,7 +387,7 @@ class Submissions(object):
 
                 command_setup += "git pull;"
 
-            _ = self.get_command_output(command_setup)
+            _ = self.execute_command(command_setup)
 
         except subprocess.CalledProcessError, e:
 
@@ -410,10 +414,11 @@ class Submissions(object):
 
             # check timestamp of GitHub commit
             command_timestamp = (
-            'cd %s/%s%s; git show -s --format=%%ci %s; cd -' % (
-                self.MAIN_REPO_DIR, self.folder_prefix, repo_suffix,
+              'cd %s; git show -s --format=%%ci %s; cd -' % (
+                os.path.join(self.MAIN_REPO_DIR, "%s%s" % (self.folder_prefix, repo_suffix)),
                 current_student[assignment_alias]['commitID']))
-            output_timestamp = self.get_command_output(command_timestamp)
+
+            output_timestamp = self.execute_command(command_timestamp)
 
             timestamp_full = output_timestamp.split('/')[0].split(' ')
             timestamp_github_raw = (timestamp_full[0] + " " + timestamp_full[1])
@@ -453,9 +458,12 @@ class Submissions(object):
         repo_suffix = self.get_student_team(key) if is_team_project else key
 
         # CD First?
-        command_checkout = ('cd Repos/%s%s; git checkout %s; git log --pretty=format:\'%%H\' -n 1; cd -' %
-                             (self.folder_prefix, repo_suffix, current_student[assignment_alias]['commitID']))
-        output_checkout = self.get_command_output(command_checkout)
+        command_checkout = ('cd %s; git checkout %s; git log --pretty=format:\'%%H\' -n 1; cd -' %
+                             (os.path.join(
+                               self.MAIN_REPO_DIR,
+                               "%s%s" % (self.folder_prefix, repo_suffix)),
+                              current_student[assignment_alias]['commitID']))
+        output_checkout = self.execute_command(command_checkout)
 
         if self.OS_TYPE == 'Windows':
             commit = output_checkout[1:len(output_checkout)-1] # windows returns \\ prefix and suffix
@@ -479,13 +487,27 @@ class Submissions(object):
 
         return has_already_pulled
 
-    def get_command_output(self, command):
+
+    def execute_command(self, command):
+        """
+        Parses the command, if it is executed on Windows and returns the output.
+
+        Arguments:
+          command:   (str) The command we will execute and return the result.
+
+        Return:
+          The command's output.
+        """
+
 
         if self.OS_TYPE == 'Windows':
-            command = command.replace(';', '&')    # windows chains commands with &, linux/macOS with ;
-            command = command.replace('& cd -', '')    # windows doesn't support 'go back to last directory' with 'cd -', so remove it
+            # Windows chains commands with &, *nix with ;
+            command = command.replace(';', '&')
+            # Windows doesn't support 'go back to last directory'
+            command = command.replace('& cd -', '')
 
         return subprocess.check_output(command, shell=True)
+
 
     def generate_report(self, assignment, student_list=None,
                         report_filename=None, is_team_project=False):
@@ -511,8 +533,6 @@ class Submissions(object):
           A file, if set, with the results and the output to stdout.
         """
 
-
-        from code import interact; interact(local=dict(globals(), **locals()))
 
         try:
 
