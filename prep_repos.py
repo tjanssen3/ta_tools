@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 class Submissions(object):
 
-    def __init__(self, is_team_project):
+
+    def __init__(self, is_team_project, should_git_pull):
         """
         Defines the variables for the current class.
 
@@ -43,11 +44,12 @@ class Submissions(object):
         self.team_records_filename = 'student_records_teams.json'
         self.team_members_filename = 'student_records_team_members.json'
         self.datetime_format = '%Y-%m-%d %H:%M:%S'
-        self.pull_from_github = True
+        self.should_git_pull = True
         self._dict_cache = {}  # cache some dictionary info here to save on IO operations
         self._pulled_teams = []  # don't pull team repos up to 4x if you can avoid it
 
         self.is_team_project = is_team_project
+        self.should_git_pull = should_git_pull
 
         self.MAIN_REPO_DIR = 'Repos'
 
@@ -400,7 +402,7 @@ class Submissions(object):
             command_setup = 'cd %s && git clean -fd && git reset --hard HEAD && git checkout .;' % (
               self.gen_prefixed_dir(repo_suffix))
 
-            if self.pull_from_github and (
+            if self.should_git_pull and (
               not self.has_pulled_repo_for_team(
                 is_team_project, repo_suffix) or
               just_cloned_repo):
