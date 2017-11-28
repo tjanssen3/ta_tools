@@ -1,10 +1,7 @@
 ##!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from unittest import TestCase
-import prep_repos
-
-'''
+"""
 Running from command line (for command line prompts working):
 
 General:
@@ -14,9 +11,20 @@ Examples:
     python -m unittest test_submissions.TestSubmissions.test_create_student_json
     python -m unittest test_submissions.TestSubmissions.test_generate_A3_report_individual
     python -m unittest test_submissions.TestSubmissions.test_generate_D0_report
-'''
+"""
+
+from unittest import TestCase
+import prep_repos
 
 class TestSubmissions(TestCase):
+
+
+    def __init__(self, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+
+        self.submission_instance = None
+
+
     # student list files should consist of GT IDs, separated by newlines
     def get_students_list_from_file(self, filename='students.txt'):
         students = []
@@ -29,9 +37,12 @@ class TestSubmissions(TestCase):
 
         return students
 
-    def generate_report_for_assignment(self, assignment, deadline, report_name, students=[], submissions=None, pull_from_github=True, is_team_project=False):
+    def generate_report_for_assignment(
+      self, assignment, deadline, report_name, students=[],
+      submissions=None, pull_from_github=True, is_team_project=False):
+
         if submissions == None:
-            submissions = prep_repos.Submissions()
+            submissions = prep_repos.Submissions(is_team_project=is_team_project)
 
         submissions.pull_from_github = pull_from_github
         submissions.prep_repos("./submissions/%s" % assignment, deadline, students, is_team_project=is_team_project)
@@ -40,11 +51,11 @@ class TestSubmissions(TestCase):
         return submissions
 
     def test_create_student_json(self):
-        submissions = prep_repos.Submissions()
+        submissions = prep_repos.Submissions(is_team_project=False)
         submissions.create_student_json("students_full.txt")
 
     def test_create_teams_json(self):
-        submissions = prep_repos.Submissions()
+        submissions = prep_repos.Submissions(is_team_project=True)
         submissions.create_team_json("student_teams.txt")
 
     def test_generate_A1_report(self):

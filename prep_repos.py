@@ -11,28 +11,43 @@ from collections import defaultdict
 
 import datetime
 import json
+import itertools
 import os
+import platform
 import re
 import subprocess
-import platform
 
 import logging
 logger = logging.getLogger(__name__)
 
+
 class Submissions(object):
 
+    def __init__(self, is_team_project):
+        """
+        Defines the variables for the current class.
 
-    def __init__(self):
-        self.FOLDER_PREFIX = "6300Fall17"
-        self.git_context = "gt-omscs-se-2017fall"
-        self.student_records_filename = "student_records.json"
-        self.student_alias_filename = "student_aliases.json"
-        self.team_records_filename = "student_records_teams.json"
-        self.team_members_filename = "student_records_team_members.json"
-        self.datetime_format = "%Y-%m-%d %H:%M:%S"
+        We could define static variables but they are not private and
+        are publicly accessible in Python.
+
+        Arguments:
+          is_team_project:   (boolean) Sets if this submmission is a team project or not>
+
+        """
+
+
+        self.FOLDER_PREFIX = '6300Fall17'
+        self.git_context = 'gt-omscs-se-2017fall'
+        self.student_records_filename = 'student_records.json'
+        self.student_alias_filename = 'student_aliases.json'
+        self.team_records_filename = 'student_records_teams.json'
+        self.team_members_filename = 'student_records_team_members.json'
+        self.datetime_format = '%Y-%m-%d %H:%M:%S'
         self.pull_from_github = True
         self._dict_cache = {}  # cache some dictionary info here to save on IO operations
         self._pulled_teams = []  # don't pull team repos up to 4x if you can avoid it
+
+        self.is_team_project = is_team_project
 
         self.MAIN_REPO_DIR = 'Repos'
 
@@ -47,17 +62,26 @@ class Submissions(object):
         self.OS_TYPE = platform.system()
 
 
-    def create_student_json(self, input_file_name):
+    def create_student_json(self, input_filename):
+        """
+        Converts the input file to two useful JSON files specifically
+        for student grading.
+
+        Arguments:
+          input_filename:   (str) The input filename we will parse into JSON
+            files.
+
+        """
+
 
         try:
-            with open(input_file_name, 'r') as input_file:
+            with open(input_filename, 'r') as input_file:
 
                 gt_id_dict, student_dict = {}, {}
 
                 for line in input_file:
 
-                    line = line.strip()
-                    parsed_line = line.split('\t')
+                    parsed_line = line.strip().split('\t')
 
                     name, gt_id, t_square_id = parsed_line[0:3]
 
@@ -72,41 +96,52 @@ class Submissions(object):
         except IOError:
             raise IOError(
               "create_student_json: couldn't find file with name %s. Exiting."
-              % input_file_name)
+              % input_filename)
 
 
-    def create_team_json(self, input_file_name):
+    def create_team_json(self, input_filename):
+        """
+        Converts the input file to two useful JSON files specifically
+        for team grading.
+
+        Arguments:
+          input_filename:   (str) The input filename we will parse into JSON
+            files.
+
+        """
+
 
         try:
+            with open(input_filename, 'r') as input_file:
 
-            with open(input_file_name, 'r') as input_file:
-
-                student_dict, teams_dict = {}, defaultdict(list)
+                student_dict, teams_list = {}, defaultdict(list)
 
                 for line in input_file:
+
                     parsed = line.strip().split('\t')
 
                     student = parsed[0]
                     team = parsed[2] if len(parsed) >= 3 else 'None'
 
                     student_dict[student] = team
-                    teams_dict[team].append(student)
+                    teams_list[team].append(student)
 
             with open(self.team_records_filename, 'w') as student_teams_file:
                 json.dump(student_dict, student_teams_file)
             with open(self.team_members_filename, 'w') as team_members_file:
-                json.dump(teams_dict, team_members_file)
+                json.dump(teams_list, team_members_file)
 
         except IOError:
             raise IOError(
               "create_team_json couldn't find file with name %s" %
-              input_file_name)
+              input_filename)
+
 
 
     def prep_repos(self, submission_folder_name, deadline,
                    whitelist=None, is_team_project=False):
 
-        assignment_alias = self.get_assignment_alias(submission_folder_name)
+        assignment_alias = submission_folder_name.split('/')[-1]
 
         if not os.path.isdir(self.MAIN_REPO_DIR):
             os.makedirs(self.MAIN_REPO_DIR)
@@ -119,25 +154,21 @@ class Submissions(object):
             teams = self.get_dictionary_from_json_file(
               self.team_records_filename)
 
-        try:
-            students = None
+        students = None
 
+        try:
             with open(self.student_records_filename, 'r+') as (
               student_records_file):
 
                 students = json.load(student_records_file)
 
                 if whitelist is None:
-                    folders = os.listdir(submission_folder_name)
+                    folders = filter(os.path.isdir, os.listdir(submission_folder_name))
                 else:
                     folders = self.get_student_folder_names_from_list(
                       whitelist, is_team_project)
 
                 for folder in folders:
-
-                    # Check for hidden .DS_Store file in MacOS
-                    if str(folder) == '.DS_Store':
-                        continue
 
                     parsed = folder.split('(')
                     t_square_id = parsed[1].strip(')')
@@ -267,30 +298,25 @@ class Submissions(object):
 
         return info
 
-    def get_assignment_alias(self, submission_folder_name):
-
-        return submission_folder_name.split('/')[len(submission_folder_name.split('/')) - 1]
-
 
     def get_student_folder_names_from_list(self, whitelist, is_team_project):
 
-        folders = []
-
         if is_team_project:
 
-            teams = self.get_dictionary_from_json_file(
+            team_dict = self.get_dictionary_from_json_file(
               self.team_members_filename)
-            whitelist_teams = []
 
-            for team in whitelist:
-                group = teams[team]
-                whitelist_teams += group
+            # Read data in whitelist
+            whitelist_multi_list = [team_dict[team] for team in whitelist]
+            # Flatten multilist and store it back
+            whitelist = list(itertools.chain.from_iterable(whitelist_multi_list))
 
-            whitelist = whitelist_teams # now contains student GTIDs instead of just team names
+            # whitelist now contains student GTIDs instead of just team names
 
         t_square_aliases = self.get_dictionary_from_json_file(self.student_alias_filename)
         student_info = self.get_dictionary_from_json_file(self.student_records_filename)
 
+        folders = []
 
         for student in whitelist:
 
@@ -302,8 +328,7 @@ class Submissions(object):
                 logger.error("Couldn't get folder name for student with GTID %s\n",
                              student)
 
-            folder_name = '%s(%s)' % (name, t_square_id)
-            folders.append(folder_name)
+            folders.append('%s(%s)' % (name, t_square_id))
 
         return folders
 
@@ -434,6 +459,7 @@ class Submissions(object):
         return current_student
 
     def check_timestamp_t_square(self, current_student, assignment_alias, deadline):
+
         if current_student[assignment_alias]['Timestamp T-Square'] != 'Missing':
             temp = current_student[assignment_alias]['Timestamp T-Square']
             timestamp_t_square = temp[0:4] + '-' + temp[4:6] + '-' + temp[6:8] + ' ' \
@@ -550,6 +576,7 @@ class Submissions(object):
                 new_student_list = []
 
                 for team in student_list:
+
                     members_list = teams[team]
 
                     new_student_list.append(team)
@@ -608,8 +635,11 @@ class Submissions(object):
                                   ("\tGitHub (%d): %s", late_github),
                                   ("\nMISSING SUBMISSIONS (%s): %s", missing),
                                   ("\nBAD COMMITS (%s):\n\t%s", bad_commit)]:
+
                 str_buffer.append(fmt_str % (len(data), ", ".join(data)))
+
             logger.info("\n".join(str_buffer))
+
 
         except IOError:
             msg = (("generate_report couldn't find %s file."
@@ -635,7 +665,7 @@ class Submissions(object):
 
 
         return os.path.join(self.MAIN_REPO_DIR, "%s%s" %
-                            self.FOLDER_PREFIX, prefix_str)
+                            (self.FOLDER_PREFIX, prefix_str))
 
 
     def is_commit_present(self, commit_status):
@@ -704,4 +734,5 @@ def init_log(log_filename=None, log_file_mode='w', fmt_str=None):
         fout.setFormatter(fmt_str)
         fout.setLevel(logging.DEBUG)
         logger.addHandler(fout)
+
 
