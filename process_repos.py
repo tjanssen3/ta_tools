@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class Submissions(object):
 
 
-    def __init__(self, is_team_project, should_git_pull):
+    def __init__(self, is_team, should_git_pull):
         """
         Defines the variables for the current class.
 
@@ -32,7 +32,7 @@ class Submissions(object):
         are publicly accessible in Python.
 
         Arguments:
-          is_team_project:   (boolean) Sets if this submmission is a team project or not>
+          self.is_team:   (boolean) Sets if this submmission is a team project or not>
 
         """
 
@@ -48,7 +48,7 @@ class Submissions(object):
         self._dict_cache = {}  # cache some dictionary info here to save on IO operations
         self._pulled_teams = []  # don't pull team repos up to 4x if you can avoid it
 
-        self.is_team_project = is_team_project
+        self.is_team = is_team
         self.should_git_pull = should_git_pull
 
         self.MAIN_REPO_DIR = 'Repos'
@@ -140,8 +140,7 @@ class Submissions(object):
 
 
 
-    def prep_repos(self, submission_folder_name, deadline,
-                   whitelist=None, is_team_project=False):
+    def prep_repos(self, submission_folder_name, deadline, whitelist=None):
 
         assignment_alias = submission_folder_name.split('/')[-1]
 
@@ -152,7 +151,7 @@ class Submissions(object):
             raise IOError("Submission folder name '%s' not found. Exiting." %
                           submission_folder_name)
 
-        if is_team_project:
+        if self.is_team:
             teams = self.get_dictionary_from_json_file(
               self.team_records_filename)
 
@@ -168,7 +167,7 @@ class Submissions(object):
                     folders = filter(os.path.isdir, os.listdir(submission_folder_name))
                 else:
                     folders = self.get_student_folder_names_from_list(
-                      whitelist, is_team_project)
+                      whitelist)
 
                 for folder in folders:
 
@@ -181,9 +180,9 @@ class Submissions(object):
                         continue
 
                     if (whitelist is not None and (
-                      (not is_team_project and
+                      (not self.is_team and
                        current_student_id not in whitelist) or
-                      (is_team_project and
+                      (self.is_team and
                        teams[current_student_id] not in whitelist)
                       )):
                         continue
@@ -198,14 +197,14 @@ class Submissions(object):
                     current_student = self.check_timestamp_file(current_student, submission_folder_name, folder, assignment_alias)
 
                     # clone repo if needed - note that you'll need to authenticate with github here; debugger may not work properly
-                    self.setup_student_repo(current_student, is_team_project)
+                    self.setup_student_repo(current_student)
 
                     # only check commit ID validity and GitHub timestamp on valid commits
                     if self.is_commit_present(current_student[assignment_alias]['commitID']):
                         # try to check out commit ID
-                        current_student = self.check_commit_ID(current_student, assignment_alias, is_team_project)
+                        current_student = self.check_commit_ID(current_student, assignment_alias)
 
-                        current_student = self.check_timestamp_github(current_student, assignment_alias, deadline, is_team_project)
+                        current_student = self.check_timestamp_github(current_student, assignment_alias, deadline)
 
                     # check T-Square timestamp against deadline
                     current_student = self.check_timestamp_t_square(current_student, assignment_alias, deadline)
@@ -219,7 +218,7 @@ class Submissions(object):
                     json.dump(students, output_file)
 
             # check out most recent commit
-            if is_team_project and whitelist is not None:
+            if self.is_team and whitelist is not None:
                 teams = self.get_dictionary_from_json_file(self.team_members_filename)
                 aliases = self.get_dictionary_from_json_file(self.student_alias_filename)
 
@@ -301,9 +300,9 @@ class Submissions(object):
         return info
 
 
-    def get_student_folder_names_from_list(self, whitelist, is_team_project):
+    def get_student_folder_names_from_list(self, whitelist):
 
-        if is_team_project:
+        if self.is_team:
 
             team_dict = self.get_dictionary_from_json_file(
               self.team_members_filename)
@@ -372,9 +371,9 @@ class Submissions(object):
         return current_student
 
 
-    def setup_student_repo(self, current_student, is_team_project=False):
+    def setup_student_repo(self, current_student):
 
-        if is_team_project:
+        if self.is_team:
             repo_suffix = self.get_student_team(current_student['gt_id'])
 
         else:
@@ -388,7 +387,7 @@ class Submissions(object):
               self.FOLDER_PREFIX, repo_suffix)
             _ = self.execute_command(command)
 
-            if is_team_project:
+            if self.is_team:
                 self._pulled_teams.append(repo_suffix)  # just do this once
 
             just_cloned_repo = True
@@ -403,8 +402,7 @@ class Submissions(object):
               self.gen_prefixed_dir(repo_suffix))
 
             if self.should_git_pull and (
-              not self.has_pulled_repo_for_team(
-                is_team_project, repo_suffix) or
+              not self.has_pulled_repo_for_team(repo_suffix) or
               just_cloned_repo):
 
                 command_setup += "git pull;"
@@ -422,14 +420,13 @@ class Submissions(object):
                              "UnicodeDecodeError\n", current_student['gt_id'])
 
     def check_timestamp_github(self, current_student,
-                               assignment_alias, deadline,
-                               is_team_project=False):
+                               assignment_alias, deadline):
 
         if not current_student[assignment_alias]['commitID valid']:
             current_student[assignment_alias]['Submission GitHub'] = 'N/A'
             current_student[assignment_alias]['Timestamp GitHub'] = 'N/A'
         else:
-            if is_team_project:
+            if self.is_team:
                 repo_suffix = self.get_student_team(current_student['gt_id'])
             else:
                 repo_suffix = current_student['gt_id']
@@ -464,8 +461,8 @@ class Submissions(object):
 
         if current_student[assignment_alias]['Timestamp T-Square'] != 'Missing':
             temp = current_student[assignment_alias]['Timestamp T-Square']
-            timestamp_t_square = temp[0:4] + '-' + temp[4:6] + '-' + temp[6:8] + ' ' \
-                                 + temp[8:10] + ':' + temp[10:12] + ':' + temp[12:14]
+            timestamp_t_square = "%s-%s-%s %s:%s:%s" % (
+              temp[0:4], temp[4:6], temp[6:8], temp[8:10], temp[10:12], temp[12:14])
             current_student[assignment_alias]['Timestamp T-Square'] = timestamp_t_square
             if timestamp_t_square <= deadline:
                 current_student[assignment_alias]['Submission T-Square'] = self.STR_OK
@@ -475,10 +472,10 @@ class Submissions(object):
         return current_student
 
     # Hashed?
-    def check_commit_ID(self, current_student, assignment_alias, is_team_project):
+    def check_commit_ID(self, current_student, assignment_alias):
 
         key = current_student['gt_id']
-        repo_suffix = self.get_student_team(key) if is_team_project else key
+        repo_suffix = self.get_student_team(key) if self.is_team else key
 
         # CD First?
         command_checkout = ('cd %s; git checkout %s; git log --pretty=format:\'%%H\' -n 1; cd -' %
@@ -496,11 +493,11 @@ class Submissions(object):
         return current_student
 
 
-    def has_pulled_repo_for_team(self, is_team_project, team_number):
+    def has_pulled_repo_for_team(self, team_number):
 
         has_already_pulled = False
 
-        if is_team_project:
+        if self.is_team:
             if team_number in self._pulled_teams:
                 has_already_pulled = True
             else:
@@ -531,7 +528,7 @@ class Submissions(object):
 
 
     def generate_report(self, assignment, student_list=None,
-                        report_filename=None, is_team_project=False):
+                        report_filename=None):
         """
         This general the final report that can be used by a grader.
 
@@ -546,9 +543,6 @@ class Submissions(object):
 
           report_filename:   (str) This is the filename of the report will generate,
             in addition to stdout. To disable this feature, pass in None.
-
-          is_team_project:   (boolean) This tells the function if we are looking
-            at teams or students.
 
         Returns:
           A file, if set, with the results and the output to stdout.
@@ -570,7 +564,7 @@ class Submissions(object):
             init_log(log_filename=report_filename)
             logger.info("Report: %s\n", assignment)
 
-            if is_team_project:
+            if self.is_team:
 
                 teams = self.get_dictionary_from_json_file(
                   self.team_members_filename)
@@ -597,7 +591,7 @@ class Submissions(object):
                 if not student: # ignore whitespace/blank lines
                     continue
 
-                if is_team_project and "Team" in student:
+                if self.is_team and "Team" in student:
                     logger.info("\n========== %s ==========", student)
                     continue
 
@@ -672,7 +666,7 @@ class Submissions(object):
 
     def is_commit_present(self, commit_status):
         """
-        Checks if the commit statue message states if the commit is present.
+        Checks if the commit statue message states it is present.
 
         Arguments:
           commit_status:   (str) The current commit status.
@@ -736,5 +730,4 @@ def init_log(log_filename=None, log_file_mode='w', fmt_str=None):
         fout.setFormatter(fmt_str)
         fout.setLevel(logging.DEBUG)
         logger.addHandler(fout)
-
 

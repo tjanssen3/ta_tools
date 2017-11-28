@@ -50,20 +50,18 @@ def process_submission(
     """
 
 
-    submissions = prep_repos.Submissions(
-      is_team_project=is_team, should_git_pull=should_git_pull)
+    submissions = process_repos.Submissions(
+      is_team=is_team, should_git_pull=should_git_pull)
 
     submissions.prep_repos(
       submission_folder_name=('./submissions/%s' % assignment_name),
       deadline=deadline,
-      whitelist=student_whitelist,
-      is_team_project=is_team)
+      whitelist=student_whitelist)
 
     submissions.generate_report(
       assignment=assignment_name,
       student_list=student_whitelist,
-      report_filename=report_filename,
-      is_team_project=is_team)
+      report_filename=report_filename)
 
 
     submissions.create_student_json('students_full.txt')
