@@ -8,6 +8,9 @@ Download student submssion so that this can be tested by graders.
 This is the front end tool to automate downloading student repos.
 We read in the user input, parse it and call the back library correctly.
 
+Execute this program with the -h for help or the two letter code for the
+assignment to download it.
+
 """
 
 
@@ -18,7 +21,9 @@ __version__ = "1.0.0"
 
 import argparse
 
-import prep_repos
+
+import process_repos
+
 
 def process_submission(
   assignment_name, deadline, report_filename, student_whitelist=None,
@@ -61,10 +66,7 @@ def process_submission(
       is_team_project=is_team)
 
 
-    if is_team:
-        submissions.create_team_json('student_teams.txt')
-    else:
-        submissions.create_student_json('students_full.txt')
+    submissions.create_student_json('students_full.txt')
 
 
 def parse_main(submission_target=None):
@@ -96,8 +98,11 @@ def parse_main(submission_target=None):
 
         try:
             return [line.strip() for line in open(filename)]
+
         except IOError:
-            print("WARNING: We will grab repos from all students")
+
+            print("WARNING: We will process repos from all students")
+
             return None
 
 
@@ -188,7 +193,7 @@ def parse_main(submission_target=None):
     assignment_info = assignment_dict.get(assignment_name, None)
 
     if assignment_info is None:
-        print("ERROR: No assignment for %2s set!")
+        print("ERROR: No assignment info for %2s set!")
         return -1
 
 
@@ -219,3 +224,4 @@ def parse_main(submission_target=None):
 
 if __name__ == "__main__":
     parse_main(submission_target=None)
+
