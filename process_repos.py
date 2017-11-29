@@ -140,32 +140,25 @@ class Submissions(object):
           "Run create_student_json first.")
 
 
-        if student_whitelist is None:
-            directory_listing = list(
-              filter(os.path.isdir, os.listdir(submission_folder_name)))
-
-        else:
-            directory_listing = self.get_student_folder_names_from_list(
-              student_whitelist)
-
+        directory_listing = self.get_student_folders(
+          submission_folder_name, student_whitelist)
 
         for folder in directory_listing:
 
-            parsed = folder.split('(')
-            t_square_id = parsed[1].strip(')')
+            t_square_id = folder.split('(')[1].strip(')')
 
-            current_student = student_dict.get(t_square_id, None)
+            current_student = student_dict.get(t_square_id, {})
 
-            if current_student is None:
+            if not current_student:
                 continue
 
             gt_student_id = current_student['gt_id']
 
             if ((not self.is_team and
-                    gt_student_id not in student_whitelist) or
-                    (self.is_team and
-                    team_dict[gt_student_id] not in student_whitelist)
-                ):
+                 gt_student_id not in student_whitelist) or
+                  (self.is_team and
+                   team_dict[gt_student_id] not in student_whitelist)
+               ):
 
                 continue
 
@@ -173,19 +166,19 @@ class Submissions(object):
             base_directory = os.path.join(submission_folder_name, folder)
             current_assignment = current_student[assignment_alias] = {}
             current_submission_file = (
-                '%s(%s)_submissionText.html' % (
+              '%s(%s)_submissionText.html' % (
                 current_student['name'], t_square_id))
 
             # Update submission text
             self.check_submission_file(
-                current_assignment=current_assignment,
-                base_directory=base_directory,
-                submission_file=current_submission_file)
+              current_assignment=current_assignment,
+              base_directory=base_directory,
+              submission_file=current_submission_file)
 
             # Update t-square timestamp
             self.compare_timestamp_file(
-                current_assignment=current_assignment,
-                base_directory=base_directory)
+              current_assignment=current_assignment,
+              base_directory=base_directory)
 
             # Clone repo if needed
             # NOTE: You'll need to authenticate with github here and
@@ -199,7 +192,7 @@ class Submissions(object):
                 self.check_commit_ID(current_assignment, gt_student_id)
 
                 self.compare_timestamp_github(
-                    current_assignment, gt_student_id, deadline)
+                  current_assignment, gt_student_id, deadline)
 
             # Check T-Square timestamp against deadline
             self.compare_timestamp_t_square(current_assignment, deadline)
@@ -240,7 +233,7 @@ class Submissions(object):
 
                 t_square_id = aliases[student]
                 team_assignment = (
-                    student_dict[t_square_id][assignment_alias])
+                  student_dict[t_square_id][assignment_alias])
 
                 try:
                     commit_time = team_assignment['Timestamp GitHub']
@@ -250,7 +243,7 @@ class Submissions(object):
                     continue
 
                 if (self.is_commit_present(commit_ID) and
-                        commit_time != 'N/A'):
+                      commit_time != 'N/A'):
 
                     commit_list.append((commit_time, commit_ID))
 
@@ -262,14 +255,14 @@ class Submissions(object):
                 _, most_recent_commit = commit_list[0]
 
                 command_checkout = (
-                    'cd %s; git checkout %s;' % (
+                  'cd %s; git checkout %s;' % (
                     self.gen_prefixed_dir(team), most_recent_commit))
 
                 _ = self.execute_command(command_checkout)
 
             else:
                 print("%s: NO VALID COMMITS FOR %s!" % (
-                    inspect.currentframe().f_code.co_name, team))
+                  inspect.currentframe().f_code.co_name, team))
 
 
     def get_correct_reference_id(self, graded_id):
@@ -350,7 +343,12 @@ class Submissions(object):
         return file_dict
 
 
-    def get_student_folder_names_from_list(self, student_whitelist):
+    def get_student_folders(self, submission_folder_name, student_whitelist):
+
+        if not student_whitelist:
+            return list(filter(
+              os.path.isdir, os.listdir(submission_folder_name)))
+
 
         if self.is_team:
 
@@ -358,11 +356,13 @@ class Submissions(object):
               self.team_members_filename, inspect.currentframe().f_code.co_name)
 
             # Read data in student_whitelist
-            student_whitelist_multi_list = [team_dict[team] for team in student_whitelist]
+            student_whitelist_multi_list = [
+              team_dict[team] for team in student_whitelist]
             # Flatten multilist and store it back
-            student_whitelist = list(itertools.chain.from_iterable(student_whitelist_multi_list))
+            student_whitelist = list(
+              itertools.chain.from_iterable(student_whitelist_multi_list))
 
-            # student_whitelist now contains student GTIDs instead of just team names
+            # student_whitelist now contains student GTIDs instead of team names
 
         t_square_aliases = self.get_file_dict(
           self.student_alias_filename, inspect.currentframe().f_code.co_name)
@@ -552,8 +552,8 @@ class Submissions(object):
 
     def read_strict_ISO_format(self, time_str):
         r"""
-        Reads in a strict ISO 8601 format date with the timezone and returns back
-        the assocated time object.
+        Reads in a strict ISO 8601 format date with the timezone and returns
+        back the assocated time object.
 
         This matches GIT's "%cI" date format.
 
@@ -686,111 +686,98 @@ class Submissions(object):
         """
 
 
-        try:
+        student_aliases = self.get_file_dict(
+          self.student_alias_filename,
+          inspect.currentframe().f_code.co_name)
 
-            student_aliases = None
-            with open(self.student_alias_filename, 'r') as alias_file:
-                student_aliases = json.load(alias_file)
-
-            student_records = None
-            with open(self.student_records_filename, 'r') as records_file:
-                student_records = json.load(records_file)
-
-        except IOError:
-
-            msg = (("%s: couldn't find %s or %s."
-                    "Try running create_student_json first.") % (
-                      inspect.currentframe().f_code.co_name,
-                      self.student_alias_filename,
-                      self.student_records_filename
-                      ))
-            raise IOError(msg)
-
-        else:
-
-            bad_commit, late_github, late_t_square, missing = [], [], [], []
-
-            init_log(log_filename=report_filename)
-            logger.info("Report: %s\n", assignment)
-
-            if self.is_team:
-
-                team_dict = self.get_file_dict(
-                  self.team_members_filename,
-                  inspect.currentframe().f_code.co_name)
-
-                new_student_list = []
-
-                for team in student_list:
-
-                    members_list = team_dict[team]
-
-                    new_student_list.append(team)
-                    new_student_list.extend(members_list)
-
-                student_list = new_student_list
-
-            elif not student_list:
-
-                student_list = student_aliases.keys() # Get all students
-
-            #else:
-
-            # Parse the student list for bad elements
-            stripped_list = map(str.strip, map(str, student_list))
-            final_list = list(filter(bool, stripped_list))
-
-            bad_student_dict = {
-              'Submission GitHub': ('late', late_github),
-              'Submission T-Square': ('late', late_t_square),
-              'commitID': ('Missing', missing),
-              'commitID valid': (False, bad_commit)
-            }
+        student_records = self.get_file_dict(
+          self.student_records_filename,
+          inspect.currentframe().f_code.co_name,
+          "Run create_student_json first.")
 
 
-            for student in final_list:
+        bad_commit, late_github, late_t_square, missing = [], [], [], []
 
-                if self.is_team and 'Team' in student:
-                    logger.info("\n========== %s ==========", student)
-                    continue
-                else:
-                    logger.info(student)
+        init_log(log_filename=report_filename)
+        logger.info("Report: %s\n", assignment)
 
-                student_info = student_records[student_aliases[student]]
+        if self.is_team:
 
-                if assignment not in student_info:
+            team_dict = self.get_file_dict(
+              self.team_members_filename,
+              inspect.currentframe().f_code.co_name)
 
-                    logger.info('\tNo records found')
-                    missing.append(student)
-                    continue
+            new_student_list = []
+
+            for team in student_list:
+
+                members_list = team_dict[team]
+
+                new_student_list.append(team)
+                new_student_list.extend(members_list)
+
+            student_list = new_student_list
+
+        elif not student_list:
+
+            student_list = student_aliases.keys() # Get all students
+
+        #else:
+
+        # Parse the student list for bad elements
+        stripped_list = map(str.strip, map(str, student_list))
+        final_list = list(filter(bool, stripped_list))
+
+        bad_student_dict = {
+          'Submission GitHub': ('late', late_github),
+          'Submission T-Square': ('late', late_t_square),
+          'commitID': ('Missing', missing),
+          'commitID valid': (False, bad_commit)
+        }
 
 
-                student_info_assignment = student_info[assignment]
+        for student in final_list:
 
-                for key in sorted(student_info_assignment.keys(), reverse=True):
+            if self.is_team and 'Team' in student:
+                logger.info("\n========== %s ==========", student)
+                continue
+            else:
+                logger.info(student)
 
-                    student_info_assignment_value = student_info_assignment[key]
-                    logger.info('\t%s: %s', key, student_info_assignment_value)
+            student_info = student_records[student_aliases[student]]
 
-                    try:
-                        target_value, target_list = bad_student_dict[key]
-                        if target_value == student_info_assignment_value:
-                            target_list.append(student)
+            if assignment not in student_info:
 
-                    except KeyError:
-                        pass
+                logger.info('\tNo records found')
+                missing.append(student)
+                continue
+
+            student_info_assignment = student_info[assignment]
+
+            for key in sorted(student_info_assignment.keys(), reverse=True):
+
+                student_info_assignment_value = student_info_assignment[key]
+                logger.info('\t%s: %s', key, student_info_assignment_value)
+
+                try:
+                    target_value, target_list = bad_student_dict[key]
+                    if target_value == student_info_assignment_value:
+                        target_list.append(student)
+
+                except KeyError:
+                    pass
 
 
-            logger.info("\n========== RESULTS ==========")
-            str_buffer = ["\nLATE SUBMISSIONS:"]
-            for fmt_str, data in [("\tT-Square (%d): %s", late_t_square),
-                                  ("\tGitHub (%d): %s", late_github),
-                                  ("\nMISSING SUBMISSIONS (%s): %s", missing),
-                                  ("\nBAD COMMITS (%s):\n\t%s", bad_commit)]:
+        logger.info("\n========== RESULTS ==========")
+        str_buffer = ["\nLATE SUBMISSIONS:"]
+        for fmt_str, data in [("\tT-Square (%d): %s", late_t_square),
+                              ("\tGitHub (%d): %s", late_github),
+                              ("\nMISSING SUBMISSIONS (%s): %s", missing),
+                              ("\nBAD COMMITS (%s):\n\t%s", bad_commit)]:
 
-                str_buffer.append(fmt_str % (len(data), ", ".join(data)))
+            str_buffer.append(fmt_str % (len(data), ", ".join(data)))
 
-            logger.info("\n".join(str_buffer))
+        logger.info("\n".join(str_buffer))
 
 
     def gen_prefixed_dir(self, prefix_str):
