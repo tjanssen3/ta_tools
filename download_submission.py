@@ -14,6 +14,7 @@ assignment to download it.
 """
 
 
+__all__ = ["get_assignment_info", "process_submission", ]
 __author__ = "David Tran, Travis Janssen"
 __credits__ = ["David Tran", "Travis Janssen"]
 __status__ = "Production"
@@ -117,7 +118,7 @@ def get_assignment_info(assignment_name):
             of GT IDs, separated by newlines.
 
         Return:
-          A list of students that should be whitelisted.
+        A list of students that should be whitelisted.
         """
 
 
@@ -206,7 +207,7 @@ def get_assignment_info(assignment_name):
     assignment_info['assignment_name'] = new_assignment_name
 
 
-    # This is the python Ternary operator
+    # This is the Python Ternary operator
     is_team = False if assignment_name.startswith('A') else True
 
     prefix = 'team' if is_team else 'student'

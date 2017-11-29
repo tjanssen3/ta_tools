@@ -5,9 +5,11 @@ r"""
 For the purposes of this file, we assume that a student is either a student
 or a team to make parsing easier, since most of the logic is identical.
 
+TODO: Many of the methods of process_repos should be combined?
 """
 
 
+__all__ = ["Submissions", ] # Controls what can be imported
 __author__ = "David Tran, Travis Janssen"
 __credits__ = ["David Tran", "Travis Janssen"]
 __status__ = "Production"
@@ -166,6 +168,8 @@ class Submissions(object):
             current_submission_file = (
               '%s(%s)_submissionText.html' % (
                 current_student['name'], t_square_id))
+
+            # TODO: These methods below should be combined together?
 
             # Update submission text
             self._check_submission_file(
@@ -377,7 +381,7 @@ class Submissions(object):
 
         bad_commit, late_github, late_t_square, missing = [], [], [], []
 
-        init_log(log_filename=report_filename)
+        _init_log(log_filename=report_filename)
         logger.info("Report: %s\n", assignment)
 
         if self.is_team:
@@ -971,21 +975,19 @@ class Submissions(object):
         if self.is_team:
 
             if team_number in self.cached_teams_pulled:
-
                 should_pull = False
-
-            # else:
 
             self.cached_teams_pulled.add(team_number)
 
         return should_pull
 
 
-def init_log(log_filename=None, log_file_mode='w', fmt_str=None):
+def _init_log(log_filename=None, log_file_mode='w', fmt_str=None):
     r"""
     Initializes the logging for this file.
 
-    This should not be in a class as this is unique per file (source code).
+    This should not be in a class as this is unique per file (source code) nor
+    should be this imported.
 
     This could be integrated by moving all logging commands but then all
     log names need to be unique to prevent clobbering. The default action is
