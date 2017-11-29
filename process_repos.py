@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class Submissions(object):
 
 
-    def __init__(self, is_team, should_git_pull):
+    def __init__(self, is_team, should_pull_repo_flag):
         r"""
         Defines the variables for the current class.
 
@@ -39,15 +39,17 @@ class Submissions(object):
 
         Arguments:
           self.is_team:   (boolean) Sets if this submission is a team project
-            or not
+            or not.
 
-          should_git_pull:   (boolean) Sets if we should git pull, if needed.
+          should_pull_repo_flag:   (boolean) Sets if we should git pull,
+            if needed.
 
         """
 
 
         self.FOLDER_PREFIX = '6300Fall17'
-        self.git_context = 'gt-omscs-se-2017fall'
+        self.GIT_CONTEXT = 'gt-omscs-se-2017fall'
+
         self.student_records_filename = 'student_records.json'
         self.student_alias_filename = 'student_aliases.json'
         self.team_records_filename = 'student_records_teams.json'
@@ -58,7 +60,7 @@ class Submissions(object):
         self.t_square_datetime_format = '%Y%m%d%H%M%S'
 
         self.is_team = is_team
-        self.should_pull_repo_flag = should_git_pull
+        self.should_pull_repo_flag = should_pull_repo_flag
 
         self.MAIN_REPO_DIR = 'student_repo'
 
@@ -89,6 +91,7 @@ class Submissions(object):
 
 
         try:
+
             with open(input_filename, 'r') as input_file:
 
                 gt_id_dict, student_dict = {}, {}
@@ -404,7 +407,7 @@ class Submissions(object):
         if not os.path.isdir(self.gen_prefixed_dir(repo_suffix)):
 
             command = 'cd %s; git clone https://github.gatech.edu/%s/%s%s.git; cd ..' % (
-              self.MAIN_REPO_DIR, self.git_context,
+              self.MAIN_REPO_DIR, self.GIT_CONTEXT,
               self.FOLDER_PREFIX, repo_suffix)
             _ = self.execute_command(command)
 
@@ -416,7 +419,8 @@ class Submissions(object):
 
             just_cloned_repo = False
 
-        # revert any local changes and pull from remote
+
+        # Revert any local changes and pull from remote
         try:
 
             pull_flag = ''
@@ -708,7 +712,7 @@ class Submissions(object):
 
             elif not student_list:
 
-                student_list = student_aliases.keys() # all student_list!
+                student_list = student_aliases.keys() # Get all students
 
             #else:
 
@@ -722,6 +726,7 @@ class Submissions(object):
               'commitID': ('Missing', missing),
               'commitID valid': (False, bad_commit)
             }
+
 
             for student in final_list:
 
@@ -841,6 +846,7 @@ def init_log(log_filename=None, log_file_mode='w', fmt_str=None):
 
     fmt_str = logging.Formatter(fmt_str)
     logger.setLevel(logging.DEBUG)
+
 
     stdout = logging.StreamHandler()
     stdout.setFormatter(fmt_str)

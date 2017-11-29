@@ -28,7 +28,7 @@ import process_repos
 
 def process_submission(
   assignment_name, deadline, report_filename, student_whitelist=None,
-  should_git_pull=True, is_team=False):
+  should_pull_repo_flag=True, is_team=False):
     r"""
     Calls the backend to do the processing.
 
@@ -43,8 +43,8 @@ def process_submission(
         stdents what we will whitelist. That is to say all students not
         in the list will be ignored.
 
-      should_git_pull:   (boolean) Tells the backend if a git repo should be
-        pulled.
+      should_pull_repo_flag:   (boolean) Tells the backend if a git repo
+        should be pulled.
 
       is_team:   (boolean) States if the assignment is a group one.
 
@@ -52,7 +52,7 @@ def process_submission(
 
 
     submissions = process_repos.Submissions(
-      is_team=is_team, should_git_pull=should_git_pull)
+      is_team=is_team, should_pull_repo_flag=should_pull_repo_flag)
 
     submissions.prep_repos(
       submission_folder_name=('./submissions/%s' % assignment_name),
@@ -78,6 +78,7 @@ def get_assignment_info(assignment_name):
 
     Returns:
       A dictionary with keys
+
     """
 
 
@@ -175,10 +176,10 @@ def get_assignment_info(assignment_name):
         print("ERROR: No assignment info for %2s set!")
         return {}
 
+
     #new_assignment_name = assignment_info['assignment_name'].replace(' ', '_')
     #assignment_info['assignment_name'] = new_assignment_name
 
-    # Parse the assignment info and add more arguments
 
     # This is the python Ternary operator
     is_team = False if assignment_name.startswith('A') else True
@@ -192,7 +193,7 @@ def get_assignment_info(assignment_name):
 
     assignment_info['is_team'] = is_team
     assignment_info['report_filename'] = report_filename
-    assignment_info['should_git_pull'] = (
+    assignment_info['should_pull_repo_flag'] = (
       False if assignment_name in no_git_pull_list else True)
     assignment_info['student_whitelist'] = student_whitelist
 
@@ -224,10 +225,12 @@ def parse_main(submission_target=None):
 
     # Parse user input if not overriden
     if submission_target is None:
+
         parser = argparse.ArgumentParser(
           description="TA Download Automation Tool",
           epilog=("Change submission_target in the code to manually override "
                   "this arg pargser and allow remote execution"))
+
         parser.add_argument(
           'assignment_name', choices=possible_argument_list,
           help="Select the assignment to download, formatted at A# or D#")
