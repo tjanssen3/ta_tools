@@ -1,5 +1,6 @@
 ##!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# pylint: disable=too-many-instance-attributes
 r"""
 For the purposes of this file, we assume that a student is either a student
 or a team to make parsing easier, since most of the logic is identical.
@@ -11,6 +12,7 @@ __author__ = "David Tran, Travis Janssen"
 __credits__ = ["David Tran", "Travis Janssen"]
 __status__ = "Production"
 __version__ = "1.0.0"
+
 
 from datetime import datetime, timedelta
 import inspect
@@ -28,6 +30,9 @@ logger = logging.getLogger(__name__)
 class Submissions(object):
     r"""
     The purpose of this class is to download and process students' submissions.
+
+    This will not grade the submission, rather we automate the process of
+    acquiring the student's repos.
 
     """
 
@@ -68,10 +73,10 @@ class Submissions(object):
 
         # Stored to be used in later logic, so typos between copies don't exist
         self.STR_INVALID = "Invalid"
+        self.STR_LATE = "Late"
         self.STR_MISSING = "Missing"
         self.STR_NA = "N/A"
         self.STR_OK = "Ok"
-        self.STR_LATE = "Late"
         self.BAD_STR_LIST = [self.STR_INVALID, self.STR_MISSING]
 
         # Cache results
@@ -83,6 +88,32 @@ class Submissions(object):
 
     def process_repos(self, submission_folder_name,
                       deadline, student_whitelist=None):
+        """
+        This is the core function that will automate the download of
+        student submissions.
+
+        There is a sister function called _process_team_repos that focuses
+        on teams that is executed after this code. The logic contained
+        here mostly applies to both set of submissions.
+
+        Arguments:
+          submission_folder_name:   (str) This is the directory for all
+            submissions that we will download. This must exist and will throw
+            an IOError if it does not exist.
+
+          deadline:   (str) This is the deadline of the assignment if it is
+            late. The input must be in strict ISO 8601 format
+            'YYYY-MM-DDTHH:MM:SS'. As python 2 does NOT natively support
+            different timezones, this must be in UTC timezone to be correctly
+            comparable.
+
+          student_whitelist:   (list of str) This is the list of student
+            username IDs that we will whitelist. That is to say all students
+            in the list will not be ignored. If set to None or empty list,
+            we will grab all students.
+
+        """
+
 
         assignment_alias = submission_folder_name.split('/')[-1]
 
@@ -98,16 +129,16 @@ class Submissions(object):
                 inspect.currentframe().f_code.co_name, submission_folder_name))
 
         if self.is_team:
-            team_dict = self.get_file_dict(
+            team_dict = self._get_file_dict(
               self.team_records_filename, inspect.currentframe().f_code.co_name)
 
-        student_dict = self.get_file_dict(
+        student_dict = self._get_file_dict(
           self.student_records_filename,
           inspect.currentframe().f_code.co_name,
           "Run create_student_json first.")
 
 
-        directory_listing = self.get_student_folders(
+        directory_listing = self._get_student_folders(
           submission_folder_name, student_whitelist)
 
         for folder in directory_listing:
@@ -137,35 +168,36 @@ class Submissions(object):
                 current_student['name'], t_square_id))
 
             # Update submission text
-            self.check_submission_file(
+            self._check_submission_file(
               current_assignment=current_assignment,
               base_directory=base_directory,
               submission_file=current_submission_file)
 
             # Update t-square timestamp
-            self.compare_timestamp_file(
+            self._set_timestamp_t_square(
               current_assignment=current_assignment,
               base_directory=base_directory)
 
             # Clone repo if needed
-            # NOTE: You'll need to authenticate with github here and
+            # NOTE: You'll need to authenticate with Github here and
             # debuggers may not work properly
-            self.setup_student_repo(gt_student_id)
+            self._setup_student_repo(gt_student_id)
 
             # Only check commit ID validity with GitHub timestamp
-            if self.is_commit_present(current_assignment['commitID']):
+            if self._is_commit_present(current_assignment['commitID']):
 
                 # Try to check out commit ID
-                self.check_commit_ID(current_assignment, gt_student_id)
+                self._check_commitID(current_assignment, gt_student_id)
 
-                self.compare_timestamp_github(
+                self._compare_timestamp_github(
                   current_assignment, gt_student_id, deadline)
 
             # Check T-Square timestamp against deadline
-            self.compare_timestamp_t_square(current_assignment, deadline)
+            self._compare_timestamp_t_square(current_assignment, deadline)
 
             # Save Result
             student_dict[t_square_id] = current_student
+
 
         if student_dict is not None:
 
@@ -174,23 +206,39 @@ class Submissions(object):
                 json.dump(student_dict, output_file)
 
         if self.is_team and student_whitelist:
-            self.process_team_repos(assignment_alias, student_whitelist)
+            self._process_team_repos(assignment_alias, student_whitelist)
 
 
-    def process_team_repos(self, assignment_alias, student_whitelist):
+    def _process_team_repos(self, assignment_alias, student_whitelist):
+        """
+        This is the extension process_repos that focuses only on teams.
+        As such this should only be called on team repos.
 
-        aliases = self.get_file_dict(
+        Arguments:
+          assignment_alias:   (str) This is the name of the assignment, i.e.
+            the submission name.
+
+          student_whitelist:   (list of str) This is the list of student
+            username IDs that we will whitelist. That is to say all students
+            in the list will not be ignored. If set to None or empty list,
+            we will grab all students.
+
+        """
+
+
+        aliases = self._get_file_dict(
           self.student_alias_filename,
           inspect.currentframe().f_code.co_name)
 
-        student_dict = self.get_file_dict(
+        student_dict = self._get_file_dict(
           self.student_records_filename,
           inspect.currentframe().f_code.co_name,
           "Run create_student_json first.")
 
-        team_dict = self.get_file_dict(
+        team_dict = self._get_file_dict(
           self.team_members_filename,
           inspect.currentframe().f_code.co_name)
+
 
         for team in student_whitelist:
 
@@ -209,10 +257,11 @@ class Submissions(object):
                 except KeyError:
                     continue
 
-                if (self.is_commit_present(commit_ID) and
+                if (self._is_commit_present(commit_ID) and
                       commit_time != self.STR_NA):
 
                     commit_list.append((commit_time, commit_ID))
+
 
             # checkout most recent commit here
             if len(commit_list) > 0:
@@ -223,28 +272,37 @@ class Submissions(object):
 
                 command_checkout = (
                   'cd %s; git checkout %s;' % (
-                    self.gen_prefixed_dir(team), most_recent_commit))
+                    self._gen_prefixed_dir(team), most_recent_commit))
 
-                _ = self.execute_command(command_checkout)
+                _ = self._execute_command(command_checkout)
 
             else:
                 print("%s: NO VALID COMMITS FOR %s!" % (
                   inspect.currentframe().f_code.co_name, team))
 
 
-    def setup_student_repo(self, gt_student_id):
+    def _setup_student_repo(self, gt_student_id):
+        r"""
+        Checks if the student Git repo is downloaded and cleans it up for the
+        grader.
+
+        Assignment:
+          gt_student_id:   (str) The student ID we will use download the repo.
+
+        """
+
 
         just_cloned_repo = None
-        repo_suffix = self.get_correct_reference_id(gt_student_id)
+        repo_suffix = self._get_correct_reference_id(gt_student_id)
 
-        if not os.path.isdir(self.gen_prefixed_dir(repo_suffix)):
+        if not os.path.isdir(self._gen_prefixed_dir(repo_suffix)):
 
             command = ('cd %s; '
                        'git clone https://github.gatech.edu/%s/%s%s.git; '
                        'cd ..') % (
                          self.MAIN_REPO_DIR, self.GIT_CONTEXT,
                          self.FOLDER_PREFIX, repo_suffix)
-            _ = self.execute_command(command)
+            _ = self._execute_command(command)
 
             self.cached_teams_pulled.add(repo_suffix)
             just_cloned_repo = True
@@ -259,17 +317,18 @@ class Submissions(object):
 
             pull_flag = ''
 
-            if self.should_pull_repo(repo_suffix) or just_cloned_repo:
+            if self._should_pull_repo(repo_suffix) or just_cloned_repo:
 
                 pull_flag = 'git pull &&'
 
             command_setup = (
               'cd %s && git clean -fd && %s git reset --hard HEAD' % (
-                self.gen_prefixed_dir(repo_suffix), pull_flag))
+                self._gen_prefixed_dir(repo_suffix), pull_flag))
 
-            _ = self.execute_command(command_setup)
+            _ = self._execute_command(command_setup)
 
-        # TODO: Unneeded
+
+        # TODO: Unneeded?
         except subprocess.CalledProcessError as error:
 
             try:
@@ -286,7 +345,7 @@ class Submissions(object):
     def generate_report(self, assignment, student_list=None,
                         report_filename=None):
         r"""
-        This general the final report that can be used by a grader.
+        This generates the final report that can be used by a grader.
 
         The result is outputted to a file (report_filename) and to stdout.
 
@@ -302,16 +361,15 @@ class Submissions(object):
             None.
 
         Returns:
-          A file, if set, with the results and the output to stdout.
-
+        A file, if set, with the results and the output to stdout.
         """
 
 
-        student_aliases = self.get_file_dict(
+        student_aliases = self._get_file_dict(
           self.student_alias_filename,
           inspect.currentframe().f_code.co_name)
 
-        student_records = self.get_file_dict(
+        student_records = self._get_file_dict(
           self.student_records_filename,
           inspect.currentframe().f_code.co_name,
           "Run create_student_json first.")
@@ -324,7 +382,7 @@ class Submissions(object):
 
         if self.is_team:
 
-            team_dict = self.get_file_dict(
+            team_dict = self._get_file_dict(
               self.team_members_filename,
               inspect.currentframe().f_code.co_name)
 
@@ -344,15 +402,17 @@ class Submissions(object):
             student_list = student_aliases.keys() # Get all students
 
         #else:
+          # We are passed a fixed set of students and this is not a team.
 
         # Parse the student list for bad elements
         stripped_list = map(str.strip, map(str, student_list))
         final_list = list(filter(bool, stripped_list))
 
+        # This is a filter to get bad students in different spots
         bad_student_dict = {
           'Submission GitHub': ('late', late_github),
           'Submission T-Square': ('late', late_t_square),
-          'commitID': ('Missing', missing),
+          'commitID': (self.STR_MISSING, missing),
           'commitID valid': (False, bad_commit)
         }
 
@@ -401,7 +461,7 @@ class Submissions(object):
         logger.info("\n".join(str_buffer))
 
 
-    def execute_command(self, command):
+    def _execute_command(self, command):
         r"""
         Parses the command, if it is executed on Windows and returns the output.
 
@@ -409,7 +469,7 @@ class Submissions(object):
           command:   (str) The command we will execute and return the result.
 
         Return:
-          The command's output.
+        The command's output.
         """
 
 
@@ -451,19 +511,19 @@ class Submissions(object):
                     student_dict[t_square_id] = {'name': name, 'gt_id': gt_id}
                     gt_id_dict[gt_id] = t_square_id
 
-            with open(self.student_records_filename, 'w') as output_file:
-                json.dump(student_dict, output_file)
-            with open(self.student_alias_filename, 'w') as alias_file:
-                json.dump(gt_id_dict, alias_file)
-
         except IOError:
             raise IOError(
               "%s: Missing file '%s'. Exiting." % (
                 inspect.currentframe().f_code.co_name, input_filename))
 
 
+        with open(self.student_records_filename, 'w') as output_file:
+            json.dump(student_dict, output_file)
+        with open(self.student_alias_filename, 'w') as alias_file:
+            json.dump(gt_id_dict, alias_file)
 
-    def get_correct_reference_id(self, graded_id):
+
+    def _get_correct_reference_id(self, graded_id):
         r"""
         Depending on which submission type, converts it to the correct ID
         instance so we can access the appropriate repo.
@@ -475,14 +535,13 @@ class Submissions(object):
           graded_id:   (str) The ID we will convert depending on the mode.
 
         Return:
-          The corrected ID.
-
+        The corrected ID.
         """
 
 
         if self.is_team:
 
-            team_dict = self.get_file_dict(
+            team_dict = self._get_file_dict(
               self.team_records_filename, inspect.currentframe().f_code.co_name)
 
             try:
@@ -501,7 +560,7 @@ class Submissions(object):
             return graded_id
 
 
-    def get_file_dict(self, filename, caller_name='', epilog=''):
+    def _get_file_dict(self, filename, caller_name='', epilog=''):
         r"""
         Attempts to access the file and retrieve the JSON within it.
 
@@ -511,7 +570,7 @@ class Submissions(object):
           caller_name:   (str) This is the caller's function name when
             printing errors.
 
-          epilog:   (str) This is the epilog error message if one is needed.
+          epilog:   (str) This is the epilogue error message if one is needed.
 
         NOTE:
           For Python, JSON and the native Python dictionary are one and the
@@ -519,7 +578,6 @@ class Submissions(object):
 
         Returns:
         The associated JSON (Python Dict) at the file or an IOError.
-
         """
 
 
@@ -536,12 +594,29 @@ class Submissions(object):
                   "%s: Missing file '%s'%s Exiting." % (
                     caller_name, filename, epilog))
 
-        #else:
-
         return file_dict
 
 
-    def get_student_folders(self, submission_folder_name, student_whitelist):
+    def _get_student_folders(self, submission_folder_name, student_whitelist):
+        r"""
+        Get a list of student repos that we will grade.
+
+        If student_whitelist is not set, we will grab all student repos.
+
+        Arguments:
+          submission_folder_name:   (str) This is the directory for all
+            submissions that we will download. This must exist and will throw
+            an IOError if it does not exist.
+
+          student_whitelist:   (list of str) This is the list of student
+            username IDs that we will whitelist. That is to say all students
+            in the list will not be ignored. If set to None or empty list,
+            we will grab all students.
+
+        Return:
+        A list of all student submissions we will process.
+        """
+
 
         if not student_whitelist:
             return list(filter(
@@ -550,21 +625,21 @@ class Submissions(object):
 
         if self.is_team:
 
-            team_dict = self.get_file_dict(
+            team_dict = self._get_file_dict(
               self.team_members_filename, inspect.currentframe().f_code.co_name)
 
             # Read data in student_whitelist
             student_whitelist_multi_list = [
               team_dict[team] for team in student_whitelist]
-            # Flatten multilist and store it back
+            # Flatten multi list to be a single list and store it back
             student_whitelist = list(
               itertools.chain.from_iterable(student_whitelist_multi_list))
 
             # student_whitelist now contains student GTIDs instead of team names
 
-        t_square_aliases = self.get_file_dict(
+        t_square_aliases = self._get_file_dict(
           self.student_alias_filename, inspect.currentframe().f_code.co_name)
-        student_info = self.get_file_dict(
+        student_info = self._get_file_dict(
           self.student_records_filename, inspect.currentframe().f_code.co_name)
 
         folders = []
@@ -586,18 +661,17 @@ class Submissions(object):
         return folders
 
 
-    def gen_prefixed_dir(self, prefix_str):
+    def _gen_prefixed_dir(self, prefix_str):
         r"""
-        This combines a directory prefix onto the valid directory,
-        to target a student's directory.
+        Combines a directory prefix into the valid directory, to target a
+        student's directory.
 
         Arguments:
           prefix_str:   (str) A valid student's prefix (be it a team number
             or a student name) so we can access it.
 
         Returns:
-          A valid directory that can be accessed.
-
+        A valid directory that can be accessed.
         """
 
 
@@ -605,17 +679,33 @@ class Submissions(object):
                             (self.FOLDER_PREFIX, prefix_str))
 
 
-    def check_commit_ID(self, current_assignment, gt_student_id):
+    def _check_commitID(self, current_assignment, gt_student_id):
+        r"""
+        Checks if the current commit is a valid comment in the Repo.
 
-        repo_suffix = self.get_correct_reference_id(graded_id=gt_student_id)
+        Some students may submit commits that are invalid.
+
+        The result is stored in current_assignment.
+
+        Arguments:
+          current_assignment:   (dict) This is the current assignment we are
+          checking the commit of.
+
+          gt_student_id:   (str) This is a student's ID what we will grab
+          the info of.
+
+        """
+
+
+        repo_suffix = self._get_correct_reference_id(graded_id=gt_student_id)
 
         command_checkout = (
           'cd %s; git checkout %s; '
           'git show --pretty=format:\'%%H\' --no-patch; cd - &> /dev/null' % (
-            self.gen_prefixed_dir(repo_suffix),
+            self._gen_prefixed_dir(repo_suffix),
             current_assignment['commitID']))
 
-        output_checkout = self.execute_command(command_checkout)
+        output_checkout = self._execute_command(command_checkout)
 
             # Windows returns \\ prefix and suffix so strip it
 
@@ -628,8 +718,26 @@ class Submissions(object):
         current_assignment['commitID valid'] = valid_commit
 
 
-    def check_submission_file(self, current_assignment,
-                              base_directory, submission_file):
+    def _check_submission_file(self, current_assignment,
+                               base_directory, submission_file):
+        r"""
+        This checks the submission file and see there is a valid commit.
+
+        Arguments:
+          current_assignment:   (dict) This is the current assignment we are
+            checking the submission of.
+
+          base_directory:   (str) This is the base directory we will read the
+            file from.
+
+          submission_file:   (str) This is the submission file we are reading
+            from.
+
+        NOTE:
+          We not check if the commit exists in the repo or is valid, only if
+          there is one. This is left to a different method.
+        """
+
 
         try:
 
@@ -646,7 +754,21 @@ class Submissions(object):
             current_assignment['commitID'] = self.STR_MISSING
 
 
-    def compare_timestamp_file(self, current_assignment, base_directory):
+    def _set_timestamp_t_square(self, current_assignment, base_directory):
+        r"""
+        This gets the timestamp and sets it in the current assignment.
+
+        The result is stored in current_assignment.
+
+        Arguments:
+          current_assignment:   (dict) This is the current assignment we are
+            checking the timestamp of.
+
+          base_directory:   (str) This is the base directory we will read the
+            file from.
+
+        """
+
 
         try:
 
@@ -655,16 +777,38 @@ class Submissions(object):
 
             with open(target_filename, 'r') as timestamp_info:
 
-                timestamp = self.fix_timestamp_t_square(timestamp_info.read())
+                timestamp = self._fix_timestamp_t_square(timestamp_info.read())
                 current_assignment['Timestamp T-Square'] = timestamp
 
         except IOError:
 
-            current_assignment['Timestamp T-Square'] = "Missing"
-            current_assignment['commitID'] = "Missing"
+            current_assignment['Timestamp T-Square'] = self.STR_MISSING
+            current_assignment['commitID'] = self.STR_MISSING
 
 
-    def compare_timestamp_github(self, current_assignment, student_id, deadline):
+    def _compare_timestamp_github(self, current_assignment,
+                                  gt_student_id, deadline):
+        r"""
+        This parses the timestamp on Github and compares it to see if the commit
+        is late.
+
+        The result is stored in current_assignment.
+
+        Arguments:
+          current_assignment:   (dict) This is the current assignment we are
+            checking the timestamp of.
+
+          gt_student_id:   (str) The student ID we will use to get the
+            timestamp.
+
+          deadline:   (str) This is the deadline of the assignment if it is
+            late. The input must be in strict ISO 8601 format
+            'YYYY-MM-DDTHH:MM:SS'. As python 2 does NOT natively support
+            different timezones, this must be in UTC timezone to be correctly
+            comparable.
+
+        """
+
 
         if not current_assignment['commitID valid']:
 
@@ -673,17 +817,17 @@ class Submissions(object):
 
         else:
 
-            repo_suffix = self.get_correct_reference_id(student_id)
+            repo_suffix = self._get_correct_reference_id(gt_student_id)
 
             # check timestamp of GitHub commit
             command_timestamp = (
               'cd %s; git show -s --format=%%cI %s; cd - &> /dev/null' % (
-                self.gen_prefixed_dir(repo_suffix),
+                self._gen_prefixed_dir(repo_suffix),
                 current_assignment['commitID']))
 
-            output_timestamp = self.execute_command(command_timestamp)
+            output_timestamp = self._execute_command(command_timestamp)
 
-            dt_object = self.read_strict_ISO_format(output_timestamp)
+            dt_object = self._read_strict_ISO_format(output_timestamp)
             timestamp_github = dt_object.strftime(self.datetime_format)
 
             # check GitHub timestamp against deadline
@@ -692,16 +836,35 @@ class Submissions(object):
             current_assignment['Submission GitHub'] = msg
 
 
-    def compare_timestamp_t_square(self, current_assignment, deadline):
+    def _compare_timestamp_t_square(self, current_assignment, deadline):
+        """
+        Compares the T-Square timestamp to see if the commit is late.
 
-        if current_assignment['Timestamp T-Square'] != 'Missing':
+        The result is stored in current_assignment.
+
+        Arguments:
+          current_assignment:   (dict) This is the current assignment we are
+            checking the timestamp of.
+
+          gt_student_id:   (str) The student ID we will use to get the
+            timestamp.
+
+          deadline:   (str) This is the deadline of the assignment if it is
+            late. The input must be in strict ISO 8601 format
+            'YYYY-MM-DDTHH:MM:SS'. As python 2 does NOT natively support
+            different timezones, this must be in UTC timezone to be correctly
+            comparable.
+
+        """
+
+        if current_assignment['Timestamp T-Square'] != self.STR_MISSING:
             final_time = current_assignment['Timestamp T-Square']
 
             msg = self.STR_OK if final_time <= deadline else self.STR_LATE
             current_assignment['Submission T-Square'] = msg
 
 
-    def fix_timestamp_t_square(self, time_str):
+    def _fix_timestamp_t_square(self, time_str):
         r"""
         This function guarantees that converting t_square time is done exactly
         one so multiple calls won't accidentally convert it twice.
@@ -710,12 +873,15 @@ class Submissions(object):
           time_str:   (str) The input string that may or may not be correct.
 
         Returns:
-          The date formatted in strict ISO 8601 format as a string.
+        The date formatted in strict ISO 8601 format as a string.
 
         NOTE:
           T-square time is one long "int" formatted as:
             > 20171006031150569
               YYYYMMDDHHMMSSSSS
+          We want to convert to strict ISO 8601 for easy comparision.
+            > 2017-10-06T03:11:50 569
+              YYYY-MM-DDTHH:MM:SS ---
 
         """
 
@@ -736,7 +902,7 @@ class Submissions(object):
         return new_time_str
 
 
-    def is_commit_present(self, commit_status):
+    def _is_commit_present(self, commit_status):
         r"""
         Checks if the commit statue message states it is present.
 
@@ -744,15 +910,14 @@ class Submissions(object):
           commit_status:   (str) The current commit status.
 
         Returns:
-          True if it's not a bad commit or False if it is.
-
+        True if it's not a bad commit or False if it is.
         """
 
 
         return commit_status not in self.BAD_STR_LIST
 
 
-    def read_strict_ISO_format(self, time_str):
+    def _read_strict_ISO_format(self, time_str):
         r"""
         Reads in a strict ISO 8601 format date with the timezone and returns
         back the assocated time object.
@@ -764,7 +929,6 @@ class Submissions(object):
 
         Returns:
         A correct datetime object with the date
-
         """
 
 
@@ -784,19 +948,18 @@ class Submissions(object):
             return time_obj - timedelta(hours=hour, minutes=minute)
 
 
-    def should_pull_repo(self, team_number):
+    def _should_pull_repo(self, team_number):
         r"""
         Checks if we should pull a repo or assume it has been pulled already.
 
-        This is only appliaple for team projects as multiple students work
+        This is only applicable for team projects as multiple students work
         on the same repo.
 
         Arguments:
           team_number:   (str or any key)
 
         Return:
-          A boolean saying if the repo should be pulled.
-
+        A boolean saying if the repo should be pulled.
         """
 
 
@@ -846,7 +1009,6 @@ def init_log(log_filename=None, log_file_mode='w', fmt_str=None):
 
 
     # Checking for Falsy doesn't work since "" and None are similar.
-    # None doesn't have a len
     if log_filename == "":
         log_filename = 'submission_runner.txt'
 

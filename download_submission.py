@@ -3,7 +3,7 @@
 # pylint: disable=star-args
 
 r"""
-Download student submssion so that this can be tested by graders.
+Download student submission so that this can be tested by graders.
 
 This is the front end tool to automate downloading student repos.
 We read in the user input, parse it and call the back library correctly.
@@ -22,7 +22,6 @@ __version__ = "1.0.0"
 
 import argparse
 
-
 import process_repos
 
 
@@ -40,8 +39,8 @@ def process_submission(
         check if this late. The format is: 'YYYY-MM-DD HH:MM:SS'
 
       student_whitelist:   (list of str) This is a list of strings of
-        stdents what we will whitelist. That is to say all students not
-        in the list will be ignored.
+        students what we will whitelist. That is to say all students
+        in the list will not be ignored.
 
       should_pull_repo_flag:   (boolean) Tells the backend if a git repo
         should be pulled.
@@ -77,7 +76,32 @@ def get_assignment_info(assignment_name):
       assignment_name:   (str) The two letter assignment code for submission.
 
     Returns:
-      A dictionary with keys
+      A dictionary with keys that can be used for the backside.
+      The keys include:
+
+      deadline:   (str) This is the deadline of the assignment if it is
+        late. The input must be in strict ISO 8601 format
+        'YYYY-MM-DDTHH:MM:SS'. As python 2 does NOT natively support
+        different timezones, this must be in UTC timezone to be correctly
+        comparable.
+
+      assignment_name:   (str) This is the name of assignment that is
+        used to store student submissions.
+
+      is_team:  (boolean) This states if the submission is a team based or
+        individual based one.
+
+      report_filename:   (str) This is the name of the report that is
+        generated. The output is sent to both stdout as well as this file.
+
+      should_pull_repo_flag:   (boolean) This sets a flag if a repo should be
+        pulled. Setting this to True does not guarantee it since we may
+        cache the results.
+
+      student_whitelist:   (list of str) This is the list of student username
+        IDs that we will whitelist. That is to say all students in the list
+        will not be ignored.
+
     """
 
 
@@ -91,6 +115,9 @@ def get_assignment_info(assignment_name):
         Arguments:
           filename:   (str) The filename we will open.  This should consist
             of GT IDs, separated by newlines.
+
+        Return:
+          A list of students that should be whitelisted.
         """
 
 
@@ -106,7 +133,6 @@ def get_assignment_info(assignment_name):
 
 
     # Deadline info EST + 4 hours = UTC, which is the T-Square deadline
-
     assignment_dict = {
       'A1': {
         'deadline' : '2017-08-28T12:05:00',
@@ -176,8 +202,8 @@ def get_assignment_info(assignment_name):
         return {}
 
 
-    #new_assignment_name = assignment_info['assignment_name'].replace(' ', '_')
-    #assignment_info['assignment_name'] = new_assignment_name
+    new_assignment_name = assignment_info['assignment_name'].replace(' ', '_')
+    assignment_info['assignment_name'] = new_assignment_name
 
 
     # This is the python Ternary operator
@@ -222,13 +248,13 @@ def parse_main(submission_target=None):
                               ['D%d' % i for i in range(0, 5)])
 
 
-    # Parse user input if not overriden
+    # Parse user input if not overridden
     if submission_target is None:
 
         parser = argparse.ArgumentParser(
           description="TA Download Automation Tool",
           epilog=("Change submission_target in the code to manually override "
-                  "this arg pargser and allow remote execution"))
+                  "this arg parser and allow remote execution"))
 
         parser.add_argument(
           'assignment_name', choices=possible_argument_list,
@@ -245,6 +271,7 @@ def parse_main(submission_target=None):
     if not assignment_info:
         return -1
 
+    # ** Converts a dictionary to match all keywords in a function declaration.
     process_submission(**assignment_info)
 
 
