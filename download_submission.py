@@ -14,7 +14,7 @@ assignment to download it.
 """
 
 
-__all__ = ["get_assignment_info", "process_submission", ]
+__all__ = ["get_assignment_info", "process_assignment", ]
 __author__ = "David Tran, Travis Janssen"
 __credits__ = ["David Tran", "Travis Janssen"]
 __status__ = "Production"
@@ -23,10 +23,10 @@ __version__ = "1.0.0"
 
 import argparse
 
-import process_repos
+from process_submissions import Submissions
 
 
-def process_submission(
+def process_assignment(
   assignment_name, deadline, report_filename, student_whitelist=None,
   should_pull_repo_flag=True, is_team=False):
     r"""
@@ -51,8 +51,8 @@ def process_submission(
     """
 
 
-    submissions = process_repos.Submissions(
-      is_team=is_team, should_pull_repo_flag=should_pull_repo_flag)
+    submissions = Submissions(is_team=is_team,
+                              should_pull_repo_flag=should_pull_repo_flag)
 
     submissions.process_repos(
       submission_folder_name=('./submissions/%s' % assignment_name),
@@ -273,7 +273,7 @@ def parse_main(submission_target=None):
         return -1
 
     # ** Converts a dictionary to match all keywords in a function declaration.
-    process_submission(**assignment_info)
+    process_assignment(**assignment_info)
 
 
 if __name__ == "__main__":
