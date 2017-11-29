@@ -2,7 +2,7 @@ archive/*
 
 *_repo
 *_repos
-Repos/*
+repos*
 
 submission/*
 submissions/*
@@ -10,6 +10,8 @@ submissions/*
 .idea/*
 local/*
 local_only/*
+
+__pycache__
 
 student*
 *.pyc
