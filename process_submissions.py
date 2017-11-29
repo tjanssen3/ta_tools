@@ -8,7 +8,9 @@ or a team to make parsing easier, since most of the logic is identical.
 See download_submission.process_assignment to see how to utilize this class
 correctly.
 
-TODO: Many of the methods of process_repos should be combined?
+TODO:
+  * Many of the methods of process_repos should be combined?
+  * We should implement git tags for group projects
 """
 
 
@@ -59,20 +61,20 @@ class Submissions(object):
         """
 
 
+        # Pattern Matching
+        self.DATETIME_PATTERN = '%Y-%m-%dT%H:%M:%S'
+        self.REGEX_PATTERN = '^[0-9]{4}(-[0-9]{2}){2}T[0-9]{2}(:[0-9]{2}){2}$'
+        self.T_SQUARE_DATETIME_PATTERN = '%Y%m%d%H%M%S'
+
+        # Constants for the class
         self.FOLDER_PREFIX = '6300Fall17'
         self.GIT_CONTEXT = 'gt-omscs-se-2017fall'
 
-        self.student_records_filename = 'student_records.json'
-        self.student_alias_filename = 'student_aliases.json'
-        self.team_records_filename = 'student_records_teams.json'
-        self.team_members_filename = 'student_records_team_members.json'
-        self.timestamp_filename = 'timestamp.txt'
-
-        self.datetime_format = '%Y-%m-%dT%H:%M:%S'
-        self.t_square_datetime_format = '%Y%m%d%H%M%S'
-
-        self.is_team = is_team
-        self.should_pull_repo_flag = should_pull_repo_flag
+        self.STUDENT_RECORDS_FILENAME = 'student_records.json'
+        self.STUDENT_ALIAS_FILENAME = 'student_aliases.json'
+        self.TEAM_RECORDS_FILENAME = 'student_records_teams.json'
+        self.TEAM_MEMBERS_FILENAME = 'student_records_team_members.json'
+        self.TIMESTAMP_FILENAME = 'timestamp.txt'
 
         self.MAIN_REPO_DIR = 'student_repo'
 
@@ -84,11 +86,16 @@ class Submissions(object):
         self.STR_OK = "Ok"
         self.BAD_STR_LIST = [self.STR_INVALID, self.STR_MISSING]
 
+        # Actual non-constant attributes
+
         # Cache results
         self.cached_file_dicts = {}  # Cache dictionary pulls
         self.cached_teams_pulled = set() # Cache pulled teams
 
         self.OS_TYPE = platform.system()
+
+        self.is_team = is_team
+        self.should_pull_repo_flag = should_pull_repo_flag
 
 
     def process_repos(self, submission_folder_name,
@@ -120,6 +127,20 @@ class Submissions(object):
         """
 
 
+        result = re.match(self.REGEX_PATTERN, deadline)
+
+        if result is None:
+            str_buffer = (
+              "%s: input deadline is not a properly formatted ISO 8601 date\n"
+              "Please enter it as 'YYYY-MM-DDTHH:MM:SS'\n"
+              "Don't forget to convert that to UTC time has Python 2.X does "
+              " not natively support it."
+            )
+            print(str_buffer % inspect.currentframe().f_code.co_name)
+
+            return
+
+
         assignment_alias = submission_folder_name.split('/')[-1]
 
         if student_whitelist is None:
@@ -135,11 +156,11 @@ class Submissions(object):
 
         if self.is_team:
             team_records = self._get_file_dict(
-              filename=self.team_records_filename,
+              filename=self.TEAM_RECORDS_FILENAME,
               caller_name=inspect.currentframe().f_code.co_name)
 
         student_records = self._get_file_dict(
-          filename=self.student_records_filename,
+          filename=self.STUDENT_RECORDS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name,
           epilog="Run create_student_json first.")
 
@@ -217,7 +238,7 @@ class Submissions(object):
         if student_records is not None:
 
             # Save info
-            with open(self.student_records_filename, 'w') as output_file:
+            with open(self.STUDENT_RECORDS_FILENAME, 'w') as output_file:
                 json.dump(student_records, output_file)
 
         if self.is_team and student_whitelist:
@@ -244,16 +265,16 @@ class Submissions(object):
 
 
         student_aliases = self._get_file_dict(
-          filename=self.student_alias_filename,
+          filename=self.STUDENT_ALIAS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name)
 
         student_records = self._get_file_dict(
-          filename=self.student_records_filename,
+          filename=self.STUDENT_RECORDS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name,
-          epilog="Run create_student_json first.")
+          epilog="Run _create_student_json first.")
 
         team_records = self._get_file_dict(
-          filename=self.team_members_filename,
+          filename=self.TEAM_MEMBERS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name)
 
 
@@ -298,67 +319,6 @@ class Submissions(object):
                   inspect.currentframe().f_code.co_name, team))
 
 
-    def _setup_student_repo(self, gt_student_id):
-        r"""
-        Checks if the student Git repo is downloaded and cleans it up for the
-        grader.
-
-        Assignment:
-          gt_student_id:   (str) The student ID we will use download the repo.
-
-        """
-
-
-        just_cloned_repo = None
-        repo_suffix = self._get_correct_reference_id(graded_id=gt_student_id)
-
-        if not os.path.isdir(self._gen_prefixed_dir(prefix_str=repo_suffix)):
-
-            command = ('cd %s; '
-                       'git clone https://github.gatech.edu/%s/%s%s.git; '
-                       'cd ..') % (
-                         self.MAIN_REPO_DIR, self.GIT_CONTEXT,
-                         self.FOLDER_PREFIX, repo_suffix)
-            _ = self._execute_command(command=command)
-
-            self.cached_teams_pulled.add(repo_suffix)
-            just_cloned_repo = True
-
-        else:
-
-            just_cloned_repo = False
-
-
-        # Revert any local changes and pull from remote
-        try:
-
-            pull_flag = ''
-
-            if self._should_pull_repo(repo_suffix) or just_cloned_repo:
-
-                pull_flag = 'git pull &&'
-
-            command = (
-              'cd %s && git clean -fd && %s git reset --hard HEAD' % (
-                self._gen_prefixed_dir(prefix_str=repo_suffix), pull_flag))
-
-            _ = self._execute_command(command=command)
-
-
-        # TODO: Unneeded?
-        except subprocess.CalledProcessError as error:
-
-            try:
-                print("%s: student '%s' subprocess.CalledProcessError: %s\n",
-                      inspect.currentframe().f_code.co_name,
-                      gt_student_id, str(error.output))
-
-            except UnicodeDecodeError:
-                print("%s: student '%s' subprocess.CalledProcessError: "
-                      "UnicodeDecodeError\n",
-                      inspect.currentframe().f_code.co_name, gt_student_id)
-
-
     def generate_report(self, assignment, student_list=None,
                         report_filename=None):
         r"""
@@ -383,13 +343,13 @@ class Submissions(object):
 
 
         student_aliases = self._get_file_dict(
-          filename=self.student_alias_filename,
+          filename=self.STUDENT_ALIAS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name)
 
         student_records = self._get_file_dict(
-          filename=self.student_records_filename,
+          filename=self.STUDENT_RECORDS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name,
-          epilog="Run create_student_json first.")
+          epilog="Run process_repos first.")
 
 
         bad_commit, late_github, late_t_square, missing = [], [], [], []
@@ -400,7 +360,7 @@ class Submissions(object):
         if self.is_team:
 
             team_records = self._get_file_dict(
-              filename=self.team_members_filename,
+              filename=self.TEAM_MEMBERS_FILENAME,
               caller_name=inspect.currentframe().f_code.co_name)
 
             new_student_list = []
@@ -478,6 +438,67 @@ class Submissions(object):
         logger.info("\n".join(str_buffer))
 
 
+    def _setup_student_repo(self, gt_student_id):
+        r"""
+        Checks if the student Git repo is downloaded and cleans it up for the
+        grader.
+
+        Assignment:
+          gt_student_id:   (str) The student ID we will use download the repo.
+
+        """
+
+
+        just_cloned_repo = None
+        repo_suffix = self._get_correct_reference_id(graded_id=gt_student_id)
+
+        if not os.path.isdir(self._gen_prefixed_dir(prefix_str=repo_suffix)):
+
+            command = ('cd %s; '
+                       'git clone https://github.gatech.edu/%s/%s%s.git; '
+                       'cd ..') % (
+                         self.MAIN_REPO_DIR, self.GIT_CONTEXT,
+                         self.FOLDER_PREFIX, repo_suffix)
+            _ = self._execute_command(command=command)
+
+            self.cached_teams_pulled.add(repo_suffix)
+            just_cloned_repo = True
+
+        else:
+
+            just_cloned_repo = False
+
+
+        # Revert any local changes and pull from remote
+        try:
+
+            pull_flag = ''
+
+            if self._should_pull_repo(repo_suffix) or just_cloned_repo:
+
+                pull_flag = 'git pull &&'
+
+            command = (
+              'cd %s && git clean -fd && %s git reset --hard HEAD' % (
+                self._gen_prefixed_dir(prefix_str=repo_suffix), pull_flag))
+
+            _ = self._execute_command(command=command)
+
+
+        # TODO: Unneeded?
+        except subprocess.CalledProcessError as error:
+
+            try:
+                print("%s: student '%s' subprocess.CalledProcessError: %s\n",
+                      inspect.currentframe().f_code.co_name,
+                      gt_student_id, str(error.output))
+
+            except UnicodeDecodeError:
+                print("%s: student '%s' subprocess.CalledProcessError: "
+                      "UnicodeDecodeError\n",
+                      inspect.currentframe().f_code.co_name, gt_student_id)
+
+
     def _execute_command(self, command):
         r"""
         Parses the command, if it is executed on Windows and returns the output.
@@ -535,9 +556,9 @@ class Submissions(object):
                 inspect.currentframe().f_code.co_name, input_filename))
 
 
-        with open(self.student_records_filename, 'w') as output_file:
+        with open(self.STUDENT_RECORDS_FILENAME, 'w') as output_file:
             json.dump(student_records, output_file)
-        with open(self.student_alias_filename, 'w') as alias_file:
+        with open(self.STUDENT_ALIAS_FILENAME, 'w') as alias_file:
             json.dump(gt_id_dict, alias_file)
 
 
@@ -560,7 +581,7 @@ class Submissions(object):
         if self.is_team:
 
             team_records = self._get_file_dict(
-              filename=self.team_records_filename,
+              filename=self.TEAM_RECORDS_FILENAME,
               caller_name=inspect.currentframe().f_code.co_name)
 
             try:
@@ -645,7 +666,7 @@ class Submissions(object):
         if self.is_team:
 
             team_records = self._get_file_dict(
-              filename=self.team_members_filename,
+              filename=self.TEAM_MEMBERS_FILENAME,
               caller_name=inspect.currentframe().f_code.co_name)
 
             # Read data in student_whitelist
@@ -658,13 +679,13 @@ class Submissions(object):
             # student_whitelist now contains student GTIDs instead of team names
 
         student_aliases = self._get_file_dict(
-          filename=self.student_alias_filename,
+          filename=self.STUDENT_ALIAS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name)
 
         student_records = self._get_file_dict(
-          filename=self.student_records_filename,
+          filename=self.STUDENT_RECORDS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name,
-          epilog="Run create_student_json first.")
+          epilog="Run _create_student_json first.")
 
         folders = []
 
@@ -796,7 +817,7 @@ class Submissions(object):
         try:
 
             target_filename = os.path.join(base_directory,
-                                           self.timestamp_filename)
+                                           self.TIMESTAMP_FILENAME)
 
             with open(target_filename, 'r') as timestamp_info:
 
@@ -853,7 +874,7 @@ class Submissions(object):
             output_timestamp = self._execute_command(command=command)
 
             dt_object = self._read_strict_ISO_format(time_str=output_timestamp)
-            timestamp_github = dt_object.strftime(self.datetime_format)
+            timestamp_github = dt_object.strftime(self.DATETIME_PATTERN)
 
             # check GitHub timestamp against deadline
             current_assignment['Timestamp GitHub'] = timestamp_github
@@ -923,7 +944,7 @@ class Submissions(object):
         else:
             new_time_str = (
               datetime.strptime(time_str[:14],
-                                self.t_square_datetime_format).isoformat())
+                                self.T_SQUARE_DATETIME_PATTERN).isoformat())
 
         return new_time_str
 
@@ -958,7 +979,7 @@ class Submissions(object):
         """
 
 
-        time_obj = datetime.strptime(time_str[:19], self.datetime_format)
+        time_obj = datetime.strptime(time_str[:19], self.DATETIME_PATTERN)
         positive_sign = hour = minute = 0
 
         try:

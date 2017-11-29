@@ -74,16 +74,28 @@ def process_assignment(
       report_filename=report_filename)
 
 
+    # TODO: Do we always need to do this?
     submissions.create_student_json('students_full.txt')
 
 
-def get_assignment_info(assignment_name):
+def get_assignment_info(assignment_name, should_pull_repo_flag=None):
     r"""
     Converts the parser input into a complete Python dictionary to call the
     backend.
 
     Arguments:
       assignment_name:   (str) The two letter assignment code for submission.
+
+      should_pull_repo_flag:   (boolean) This is an override specifying
+      if we should download the repos from Git or not. By default this is None.
+      Here are the possible options:
+
+      None:  Default auto settings which is download repos for all individual
+        assignments and the first part of a team assignment.
+
+      True (or anything Truthy): Always download repos from Github.
+
+      False (or anything Falsy but not None): Never download repos from Github.
 
     Returns:
       A dictionary with keys that can be used for the backside.
@@ -232,9 +244,13 @@ def get_assignment_info(assignment_name):
 
     assignment_info['is_team'] = is_team
     assignment_info['report_filename'] = report_filename
-    assignment_info['should_pull_repo_flag'] = (
-      False if assignment_name in no_git_pull_list else True)
     assignment_info['student_whitelist'] = student_whitelist
+
+    if should_pull_repo_flag is None:
+        assignment_info['should_pull_repo_flag'] = (
+          False if assignment_name in no_git_pull_list else True)
+    else:
+        assignment_info['should_pull_repo_flag'] = bool(should_pull_repo_flag)
 
 
     return assignment_info
@@ -258,8 +274,10 @@ def parse_main(submission_target=None):
     # the penultimate value (not the last value!)
 
     # This is a list of ALL possible assignments allowed by the parser.
-    possible_argument_list = (['A%d' % i for i in range(1, 9)] +
-                              ['D%d' % i for i in range(0, 5)])
+    # These will include more options than actual assignments so it is
+    # easier or remove assignments as needed but change the ranges as needed.
+    possible_argument_list = (['A%d' % i for i in range(1, 10)] +
+                              ['D%d' % i for i in range(0, 6)])
 
 
     # Parse user input if not overridden
