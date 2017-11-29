@@ -187,13 +187,13 @@ class Submissions(object):
                   '%s(%s)_submissionText.html' % (
                     current_student['name'], t_square_id))
 
-                # get submission text
+                # Update submission text
                 self.check_submission_file(
                   current_assignment=current_assignment,
                   base_directory=base_directory,
                   submission_file=current_submission_file)
 
-                # get t-square timestamp
+                # Update t-square timestamp
                 self.compare_timestamp_file(
                   current_assignment=current_assignment,
                   base_directory=base_directory)
@@ -203,7 +203,7 @@ class Submissions(object):
                 # debuggers may not work properly
                 self.setup_student_repo(gt_student_id)
 
-                # Only check commit ID validity with  GitHub timestamp
+                # Only check commit ID validity with GitHub timestamp
                 if self.is_commit_present(current_assignment['commitID']):
 
                     # Try to check out commit ID
@@ -212,10 +212,10 @@ class Submissions(object):
                     self.compare_timestamp_github(
                       current_assignment, gt_student_id, deadline)
 
-                # check T-Square timestamp against deadline
+                # Check T-Square timestamp against deadline
                 self.compare_timestamp_t_square(current_assignment, deadline)
 
-                # save info
+                # Save Result
                 student_dict[t_square_id] = current_student
 
             if student_dict is not None:
@@ -224,51 +224,67 @@ class Submissions(object):
                 with open(self.student_records_filename, 'w') as output_file:
                     json.dump(student_dict, output_file)
 
-            # Team Processing
-            if self.is_team and student_whitelist:
+        if self.is_team and student_whitelist:
+            self.process_team_repos(assignment_alias, student_whitelist)
 
-                team_dict = self.get_file_dict(self.team_members_filename)
-                aliases = self.get_file_dict(self.student_alias_filename)
+    def process_team_repos(self, assignment_alias, student_whitelist):
 
-                for team in student_whitelist:
+        team_dict = self.get_file_dict(self.team_members_filename)
+        aliases = self.get_file_dict(self.student_alias_filename)
 
-                    member_list, commit_list = team_dict[team], []
+        try:
 
-                    for student in member_list:
+            student_dict = None
 
-                        t_square_id = aliases[student]
-                        team_assignment = (
-                          student_dict[t_square_id][assignment_alias])
+            with open(self.student_records_filename, 'r+') as (
+              student_records_file):
 
-                        try:
-                            commit_time = team_assignment['Timestamp GitHub']
-                            commit_ID = team_assignment['commitID']
+                student_dict = json.load(student_records_file)
 
-                        except KeyError:
-                            continue
+        except IOError:
+            raise IOError("%s: Missing student records file '%s'. "
+                          "Run create_student_json first. Exiting." % (
+                            inspect.currentframe().f_code.co_name,
+                            self.student_records_filename))
+        else:
+            for team in student_whitelist:
 
-                        if (self.is_commit_present(commit_ID) and
-                              commit_time != 'N/A'):
+                member_list, commit_list = team_dict[team], []
 
-                            commit_list.append((commit_time, commit_ID))
+                for student in member_list:
 
-                    # checkout most recent commit here
-                    if len(commit_list) > 0:
+                    t_square_id = aliases[student]
+                    team_assignment = (
+                        student_dict[t_square_id][assignment_alias])
 
-                        # Most recent should be first
-                        commit_list.sort(reverse=True)
-                        _, most_recent_commit = commit_list[0]
+                    try:
+                        commit_time = team_assignment['Timestamp GitHub']
+                        commit_ID = team_assignment['commitID']
 
-                        command_checkout = (
-                          'cd %s; git checkout %s;' % (
-                            self.gen_prefixed_dir(team), most_recent_commit))
+                    except KeyError:
+                        continue
 
-                        _ = self.execute_command(command_checkout)
+                    if (self.is_commit_present(commit_ID) and
+                            commit_time != 'N/A'):
 
-                    else:
-                        print("%s: NO VALID COMMITS FOR %s!" % (
-                          inspect.currentframe().f_code.co_name, team))
+                        commit_list.append((commit_time, commit_ID))
 
+                # checkout most recent commit here
+                if len(commit_list) > 0:
+
+                    # Most recent should be first
+                    commit_list.sort(reverse=True)
+                    _, most_recent_commit = commit_list[0]
+
+                    command_checkout = (
+                        'cd %s; git checkout %s;' % (
+                        self.gen_prefixed_dir(team), most_recent_commit))
+
+                    _ = self.execute_command(command_checkout)
+
+                else:
+                    print("%s: NO VALID COMMITS FOR %s!" % (
+                        inspect.currentframe().f_code.co_name, team))
 
 
     def get_correct_reference_id(self, graded_id):
