@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 
 class Submissions(object):
+    r"""
+    The purpose of this class is to download and process students' submissions.
+
+    """
 
 
     def __init__(self, is_team, should_pull_repo_flag):
@@ -65,6 +69,7 @@ class Submissions(object):
         # Stored to be used in later logic, so typos between copies don't exist
         self.STR_INVALID = "Invalid"
         self.STR_MISSING = "Missing"
+        self.STR_NA = "N/A"
         self.STR_OK = "Ok"
         self.STR_LATE = "Late"
         self.BAD_STR_LIST = [self.STR_INVALID, self.STR_MISSING]
@@ -74,44 +79,6 @@ class Submissions(object):
         self.cached_teams_pulled = set() # Cache pulled teams
 
         self.OS_TYPE = platform.system()
-
-
-    def create_student_json(self, input_filename):
-        r"""
-        Converts the input file to two useful JSON files specifically
-        for student grading.
-
-        Arguments:
-          input_filename:   (str) The input filename we will parse into JSON
-            files.
-
-        """
-
-
-        try:
-
-            with open(input_filename, 'r') as input_file:
-
-                gt_id_dict, student_dict = {}, {}
-
-                for line in input_file:
-
-                    parsed_line = line.strip().split('\t')
-
-                    name, gt_id, t_square_id = parsed_line[0:3]
-
-                    student_dict[t_square_id] = {'name': name, 'gt_id': gt_id}
-                    gt_id_dict[gt_id] = t_square_id
-
-            with open(self.student_records_filename, 'w') as output_file:
-                json.dump(student_dict, output_file)
-            with open(self.student_alias_filename, 'w') as alias_file:
-                json.dump(gt_id_dict, alias_file)
-
-        except IOError:
-            raise IOError(
-              "%s: Missing file '%s'. Exiting." % (
-                inspect.currentframe().f_code.co_name, input_filename))
 
 
     def process_repos(self, submission_folder_name,
@@ -243,7 +210,7 @@ class Submissions(object):
                     continue
 
                 if (self.is_commit_present(commit_ID) and
-                      commit_time != 'N/A'):
+                      commit_time != self.STR_NA):
 
                     commit_list.append((commit_time, commit_ID))
 
@@ -263,6 +230,237 @@ class Submissions(object):
             else:
                 print("%s: NO VALID COMMITS FOR %s!" % (
                   inspect.currentframe().f_code.co_name, team))
+
+
+    def setup_student_repo(self, gt_student_id):
+
+        just_cloned_repo = None
+        repo_suffix = self.get_correct_reference_id(gt_student_id)
+
+        if not os.path.isdir(self.gen_prefixed_dir(repo_suffix)):
+
+            command = ('cd %s; '
+                       'git clone https://github.gatech.edu/%s/%s%s.git; '
+                       'cd ..') % (
+                         self.MAIN_REPO_DIR, self.GIT_CONTEXT,
+                         self.FOLDER_PREFIX, repo_suffix)
+            _ = self.execute_command(command)
+
+            self.cached_teams_pulled.add(repo_suffix)
+            just_cloned_repo = True
+
+        else:
+
+            just_cloned_repo = False
+
+
+        # Revert any local changes and pull from remote
+        try:
+
+            pull_flag = ''
+
+            if self.should_pull_repo(repo_suffix) or just_cloned_repo:
+
+                pull_flag = 'git pull &&'
+
+            command_setup = (
+              'cd %s && git clean -fd && %s git reset --hard HEAD' % (
+                self.gen_prefixed_dir(repo_suffix), pull_flag))
+
+            _ = self.execute_command(command_setup)
+
+        # TODO: Unneeded
+        except subprocess.CalledProcessError as error:
+
+            try:
+                print("%s: student '%s' subprocess.CalledProcessError: %s\n",
+                      inspect.currentframe().f_code.co_name,
+                      gt_student_id, str(error.output))
+
+            except UnicodeDecodeError:
+                print("%s: student '%s' subprocess.CalledProcessError: "
+                      "UnicodeDecodeError\n",
+                      inspect.currentframe().f_code.co_name, gt_student_id)
+
+
+    def generate_report(self, assignment, student_list=None,
+                        report_filename=None):
+        r"""
+        This general the final report that can be used by a grader.
+
+        The result is outputted to a file (report_filename) and to stdout.
+
+        Arguments:
+          assignment:   (str) This is the name of the assignment we are
+            comparing against.
+
+          student_list:   (list of str) This is a list of students that we
+            will analyze and prints the results.
+
+          report_filename:   (str) This is the filename of the report will
+            generate, in addition to stdout. To disable this feature, pass in
+            None.
+
+        Returns:
+          A file, if set, with the results and the output to stdout.
+
+        """
+
+
+        student_aliases = self.get_file_dict(
+          self.student_alias_filename,
+          inspect.currentframe().f_code.co_name)
+
+        student_records = self.get_file_dict(
+          self.student_records_filename,
+          inspect.currentframe().f_code.co_name,
+          "Run create_student_json first.")
+
+
+        bad_commit, late_github, late_t_square, missing = [], [], [], []
+
+        init_log(log_filename=report_filename)
+        logger.info("Report: %s\n", assignment)
+
+        if self.is_team:
+
+            team_dict = self.get_file_dict(
+              self.team_members_filename,
+              inspect.currentframe().f_code.co_name)
+
+            new_student_list = []
+
+            for team in student_list:
+
+                members_list = team_dict[team]
+
+                new_student_list.append(team)
+                new_student_list.extend(members_list)
+
+            student_list = new_student_list
+
+        elif not student_list:
+
+            student_list = student_aliases.keys() # Get all students
+
+        #else:
+
+        # Parse the student list for bad elements
+        stripped_list = map(str.strip, map(str, student_list))
+        final_list = list(filter(bool, stripped_list))
+
+        bad_student_dict = {
+          'Submission GitHub': ('late', late_github),
+          'Submission T-Square': ('late', late_t_square),
+          'commitID': ('Missing', missing),
+          'commitID valid': (False, bad_commit)
+        }
+
+
+        for student in final_list:
+
+            if self.is_team and 'Team' in student:
+                logger.info("\n========== %s ==========", student)
+                continue
+            else:
+                logger.info(student)
+
+            student_info = student_records[student_aliases[student]]
+
+            if assignment not in student_info:
+
+                logger.info('\tNo records found')
+                missing.append(student)
+                continue
+
+            student_info_assignment = student_info[assignment]
+
+            for key in sorted(student_info_assignment.keys(), reverse=True):
+
+                student_info_assignment_value = student_info_assignment[key]
+                logger.info('\t%s: %s', key, student_info_assignment_value)
+
+                try:
+                    target_value, target_list = bad_student_dict[key]
+                    if target_value == student_info_assignment_value:
+                        target_list.append(student)
+
+                except KeyError:
+                    pass
+
+
+        logger.info("\n========== RESULTS ==========")
+        str_buffer = ["\nLATE SUBMISSIONS:"]
+        for fmt_str, data in [("\tT-Square (%d): %s", late_t_square),
+                              ("\tGitHub (%d): %s", late_github),
+                              ("\nMISSING SUBMISSIONS (%s): %s", missing),
+                              ("\nBAD COMMITS (%s):\n\t%s", bad_commit)]:
+
+            str_buffer.append(fmt_str % (len(data), ", ".join(data)))
+
+        logger.info("\n".join(str_buffer))
+
+
+    def execute_command(self, command):
+        r"""
+        Parses the command, if it is executed on Windows and returns the output.
+
+        Arguments:
+          command:   (str) The command we will execute and return the result.
+
+        Return:
+          The command's output.
+        """
+
+
+        if self.OS_TYPE == 'Windows':
+
+            # Windows chains commands with &, *nix with ;
+            command = command.replace(';', '&')
+
+            # Windows doesn't support 'go back to last directory'
+            command = command[:command.index('& cd -')]
+
+        return subprocess.check_output(command, shell=True).strip()
+
+
+    def create_student_json(self, input_filename):
+        r"""
+        Converts the input file to two useful JSON files specifically
+        for student grading.
+
+        Arguments:
+          input_filename:   (str) The input filename we will parse into JSON
+            files.
+
+        """
+
+
+        try:
+
+            with open(input_filename, 'r') as input_file:
+
+                gt_id_dict, student_dict = {}, {}
+
+                for line in input_file:
+
+                    parsed_line = line.strip().split('\t')
+
+                    name, gt_id, t_square_id = parsed_line[0:3]
+
+                    student_dict[t_square_id] = {'name': name, 'gt_id': gt_id}
+                    gt_id_dict[gt_id] = t_square_id
+
+            with open(self.student_records_filename, 'w') as output_file:
+                json.dump(student_dict, output_file)
+            with open(self.student_alias_filename, 'w') as alias_file:
+                json.dump(gt_id_dict, alias_file)
+
+        except IOError:
+            raise IOError(
+              "%s: Missing file '%s'. Exiting." % (
+                inspect.currentframe().f_code.co_name, input_filename))
+
 
 
     def get_correct_reference_id(self, graded_id):
@@ -388,6 +586,48 @@ class Submissions(object):
         return folders
 
 
+    def gen_prefixed_dir(self, prefix_str):
+        r"""
+        This combines a directory prefix onto the valid directory,
+        to target a student's directory.
+
+        Arguments:
+          prefix_str:   (str) A valid student's prefix (be it a team number
+            or a student name) so we can access it.
+
+        Returns:
+          A valid directory that can be accessed.
+
+        """
+
+
+        return os.path.join(self.MAIN_REPO_DIR, "%s%s" %
+                            (self.FOLDER_PREFIX, prefix_str))
+
+
+    def check_commit_ID(self, current_assignment, gt_student_id):
+
+        repo_suffix = self.get_correct_reference_id(graded_id=gt_student_id)
+
+        command_checkout = (
+          'cd %s; git checkout %s; '
+          'git show --pretty=format:\'%%H\' --no-patch; cd - &> /dev/null' % (
+            self.gen_prefixed_dir(repo_suffix),
+            current_assignment['commitID']))
+
+        output_checkout = self.execute_command(command_checkout)
+
+            # Windows returns \\ prefix and suffix so strip it
+
+        if self.OS_TYPE == 'Windows':
+            commit = output_checkout[1:-1]
+        else:
+            commit = output_checkout
+
+        valid_commit = commit == current_assignment['commitID']
+        current_assignment['commitID valid'] = valid_commit
+
+
     def check_submission_file(self, current_assignment,
                               base_directory, submission_file):
 
@@ -424,63 +664,12 @@ class Submissions(object):
             current_assignment['commitID'] = "Missing"
 
 
-    def setup_student_repo(self, gt_student_id):
-
-        just_cloned_repo = None
-        repo_suffix = self.get_correct_reference_id(gt_student_id)
-
-        if not os.path.isdir(self.gen_prefixed_dir(repo_suffix)):
-
-            command = ('cd %s; '
-                       'git clone https://github.gatech.edu/%s/%s%s.git; '
-                       'cd ..') % (
-                         self.MAIN_REPO_DIR, self.GIT_CONTEXT,
-                         self.FOLDER_PREFIX, repo_suffix)
-            _ = self.execute_command(command)
-
-            self.cached_teams_pulled.add(repo_suffix)
-            just_cloned_repo = True
-
-        else:
-
-            just_cloned_repo = False
-
-
-        # Revert any local changes and pull from remote
-        try:
-
-            pull_flag = ''
-
-            if self.should_pull_repo(repo_suffix) or just_cloned_repo:
-
-                pull_flag = 'git pull &&'
-
-            command_setup = (
-              'cd %s && git clean -fd && %s git reset --hard HEAD' % (
-                self.gen_prefixed_dir(repo_suffix), pull_flag))
-
-            _ = self.execute_command(command_setup)
-
-        # TODO: Unneeded
-        except subprocess.CalledProcessError as error:
-
-            try:
-                print("%s: student '%s' subprocess.CalledProcessError: %s\n",
-                      inspect.currentframe().f_code.co_name,
-                      gt_student_id, str(error.output))
-
-            except UnicodeDecodeError:
-                print("%s: student '%s' subprocess.CalledProcessError: "
-                      "UnicodeDecodeError\n",
-                      inspect.currentframe().f_code.co_name, gt_student_id)
-
-
     def compare_timestamp_github(self, current_assignment, student_id, deadline):
 
         if not current_assignment['commitID valid']:
 
-            current_assignment['Submission GitHub'] = 'N/A'
-            current_assignment['Timestamp GitHub'] = 'N/A'
+            current_assignment['Submission GitHub'] = self.STR_NA
+            current_assignment['Timestamp GitHub'] = self.STR_NA
 
         else:
 
@@ -501,6 +690,15 @@ class Submissions(object):
             current_assignment['Timestamp GitHub'] = timestamp_github
             msg = self.STR_OK if timestamp_github < deadline else self.STR_LATE
             current_assignment['Submission GitHub'] = msg
+
+
+    def compare_timestamp_t_square(self, current_assignment, deadline):
+
+        if current_assignment['Timestamp T-Square'] != 'Missing':
+            final_time = current_assignment['Timestamp T-Square']
+
+            msg = self.STR_OK if final_time <= deadline else self.STR_LATE
+            current_assignment['Submission T-Square'] = msg
 
 
     def fix_timestamp_t_square(self, time_str):
@@ -538,13 +736,20 @@ class Submissions(object):
         return new_time_str
 
 
-    def compare_timestamp_t_square(self, current_assignment, deadline):
+    def is_commit_present(self, commit_status):
+        r"""
+        Checks if the commit statue message states it is present.
 
-        if current_assignment['Timestamp T-Square'] != 'Missing':
-            final_time = current_assignment['Timestamp T-Square']
+        Arguments:
+          commit_status:   (str) The current commit status.
 
-            msg = self.STR_OK if final_time <= deadline else self.STR_LATE
-            current_assignment['Submission T-Square'] = msg
+        Returns:
+          True if it's not a bad commit or False if it is.
+
+        """
+
+
+        return commit_status not in self.BAD_STR_LIST
 
 
     def read_strict_ISO_format(self, time_str):
@@ -579,29 +784,6 @@ class Submissions(object):
             return time_obj - timedelta(hours=hour, minutes=minute)
 
 
-    def check_commit_ID(self, current_assignment, gt_student_id):
-
-        repo_suffix = self.get_correct_reference_id(graded_id=gt_student_id)
-
-        command_checkout = (
-          'cd %s; git checkout %s; '
-          'git show --pretty=format:\'%%H\' --no-patch; cd - &> /dev/null' % (
-            self.gen_prefixed_dir(repo_suffix),
-            current_assignment['commitID']))
-
-        output_checkout = self.execute_command(command_checkout)
-
-            # Windows returns \\ prefix and suffix so strip it
-
-        if self.OS_TYPE == 'Windows':
-            commit = output_checkout[1:-1]
-        else:
-            commit = output_checkout
-
-        valid_commit = commit == current_assignment['commitID']
-        current_assignment['commitID valid'] = valid_commit
-
-
     def should_pull_repo(self, team_number):
         r"""
         Checks if we should pull a repo or assume it has been pulled already.
@@ -634,182 +816,6 @@ class Submissions(object):
             self.cached_teams_pulled.add(team_number)
 
         return should_pull
-
-
-    def execute_command(self, command):
-        r"""
-        Parses the command, if it is executed on Windows and returns the output.
-
-        Arguments:
-          command:   (str) The command we will execute and return the result.
-
-        Return:
-          The command's output.
-        """
-
-
-        if self.OS_TYPE == 'Windows':
-
-            # Windows chains commands with &, *nix with ;
-            command = command.replace(';', '&')
-
-            # Windows doesn't support 'go back to last directory'
-            command = command[:command.index('& cd -')]
-
-        return subprocess.check_output(command, shell=True).strip()
-
-
-    def generate_report(self, assignment, student_list=None,
-                        report_filename=None):
-        r"""
-        This general the final report that can be used by a grader.
-
-        The result is outputted to a file (report_filename) and to stdout.
-
-        Arguments:
-          assignment:   (str) This is the name of the assignment we are
-            comparing against.
-
-          student_list:   (list of str) This is a list of students that we
-            will analyze and prints the results.
-
-          report_filename:   (str) This is the filename of the report will
-            generate, in addition to stdout. To disable this feature, pass in
-            None.
-
-        Returns:
-          A file, if set, with the results and the output to stdout.
-
-        """
-
-
-        student_aliases = self.get_file_dict(
-          self.student_alias_filename,
-          inspect.currentframe().f_code.co_name)
-
-        student_records = self.get_file_dict(
-          self.student_records_filename,
-          inspect.currentframe().f_code.co_name,
-          "Run create_student_json first.")
-
-
-        bad_commit, late_github, late_t_square, missing = [], [], [], []
-
-        init_log(log_filename=report_filename)
-        logger.info("Report: %s\n", assignment)
-
-        if self.is_team:
-
-            team_dict = self.get_file_dict(
-              self.team_members_filename,
-              inspect.currentframe().f_code.co_name)
-
-            new_student_list = []
-
-            for team in student_list:
-
-                members_list = team_dict[team]
-
-                new_student_list.append(team)
-                new_student_list.extend(members_list)
-
-            student_list = new_student_list
-
-        elif not student_list:
-
-            student_list = student_aliases.keys() # Get all students
-
-        #else:
-
-        # Parse the student list for bad elements
-        stripped_list = map(str.strip, map(str, student_list))
-        final_list = list(filter(bool, stripped_list))
-
-        bad_student_dict = {
-          'Submission GitHub': ('late', late_github),
-          'Submission T-Square': ('late', late_t_square),
-          'commitID': ('Missing', missing),
-          'commitID valid': (False, bad_commit)
-        }
-
-
-        for student in final_list:
-
-            if self.is_team and 'Team' in student:
-                logger.info("\n========== %s ==========", student)
-                continue
-            else:
-                logger.info(student)
-
-            student_info = student_records[student_aliases[student]]
-
-            if assignment not in student_info:
-
-                logger.info('\tNo records found')
-                missing.append(student)
-                continue
-
-            student_info_assignment = student_info[assignment]
-
-            for key in sorted(student_info_assignment.keys(), reverse=True):
-
-                student_info_assignment_value = student_info_assignment[key]
-                logger.info('\t%s: %s', key, student_info_assignment_value)
-
-                try:
-                    target_value, target_list = bad_student_dict[key]
-                    if target_value == student_info_assignment_value:
-                        target_list.append(student)
-
-                except KeyError:
-                    pass
-
-
-        logger.info("\n========== RESULTS ==========")
-        str_buffer = ["\nLATE SUBMISSIONS:"]
-        for fmt_str, data in [("\tT-Square (%d): %s", late_t_square),
-                              ("\tGitHub (%d): %s", late_github),
-                              ("\nMISSING SUBMISSIONS (%s): %s", missing),
-                              ("\nBAD COMMITS (%s):\n\t%s", bad_commit)]:
-
-            str_buffer.append(fmt_str % (len(data), ", ".join(data)))
-
-        logger.info("\n".join(str_buffer))
-
-
-    def gen_prefixed_dir(self, prefix_str):
-        r"""
-        This combines a directory prefix onto the valid directory,
-        to target a student's directory.
-
-        Arguments:
-          prefix_str:   (str) A valid student's prefix (be it a team number
-            or a student name) so we can access it.
-
-        Returns:
-          A valid directory that can be accessed.
-
-        """
-
-
-        return os.path.join(self.MAIN_REPO_DIR, "%s%s" %
-                            (self.FOLDER_PREFIX, prefix_str))
-
-
-    def is_commit_present(self, commit_status):
-        r"""
-        Checks if the commit statue message states it is present.
-
-        Arguments:
-          commit_status:   (str) The current commit status.
-
-        Returns:
-          True if it's not a bad commit or False if it is.
-
-        """
-
-
-        return commit_status not in self.BAD_STR_LIST
 
 
 def init_log(log_filename=None, log_file_mode='w', fmt_str=None):
