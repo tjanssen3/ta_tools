@@ -131,160 +131,145 @@ class Submissions(object):
                 inspect.currentframe().f_code.co_name, submission_folder_name))
 
         if self.is_team:
-            team_dict = self.get_file_dict(self.team_records_filename)
+            team_dict = self.get_file_dict(
+              self.team_records_filename, inspect.currentframe().f_code.co_name)
+
+        student_dict = self.get_file_dict(
+          self.student_records_filename,
+          inspect.currentframe().f_code.co_name,
+          "Run create_student_json first.")
 
 
-        try:
-
-            student_dict = None
-
-            with open(self.student_records_filename, 'r+') as (
-              student_records_file):
-
-                student_dict = json.load(student_records_file)
-
-        except IOError:
-            raise IOError("%s: Missing student records file '%s'. "
-                          "Run create_student_json first. Exiting." % (
-                            inspect.currentframe().f_code.co_name,
-                            self.student_records_filename))
+        if student_whitelist is None:
+            directory_listing = list(
+              filter(os.path.isdir, os.listdir(submission_folder_name)))
 
         else:
-
-            if student_whitelist is None:
-                directory_listing = list(
-                  filter(os.path.isdir, os.listdir(submission_folder_name)))
-
-            else:
-                directory_listing = self.get_student_folder_names_from_list(
-                  student_whitelist)
+            directory_listing = self.get_student_folder_names_from_list(
+              student_whitelist)
 
 
-            for folder in directory_listing:
+        for folder in directory_listing:
 
-                parsed = folder.split('(')
-                t_square_id = parsed[1].strip(')')
+            parsed = folder.split('(')
+            t_square_id = parsed[1].strip(')')
 
-                current_student = student_dict.get(t_square_id, None)
+            current_student = student_dict.get(t_square_id, None)
 
-                if current_student is None:
-                    continue
+            if current_student is None:
+                continue
 
-                gt_student_id = current_student['gt_id']
+            gt_student_id = current_student['gt_id']
 
-                if ((not self.is_team and
-                     gt_student_id not in student_whitelist) or
-                      (self.is_team and
-                       team_dict[gt_student_id] not in student_whitelist)
-                   ):
+            if ((not self.is_team and
+                    gt_student_id not in student_whitelist) or
+                    (self.is_team and
+                    team_dict[gt_student_id] not in student_whitelist)
+                ):
 
-                    continue
+                continue
 
-                # Checking repeated results on calls to simplify them
-                base_directory = os.path.join(submission_folder_name, folder)
-                current_assignment = current_student[assignment_alias] = {}
-                current_submission_file = (
-                  '%s(%s)_submissionText.html' % (
-                    current_student['name'], t_square_id))
+            # Checking repeated results on calls to simplify them
+            base_directory = os.path.join(submission_folder_name, folder)
+            current_assignment = current_student[assignment_alias] = {}
+            current_submission_file = (
+                '%s(%s)_submissionText.html' % (
+                current_student['name'], t_square_id))
 
-                # Update submission text
-                self.check_submission_file(
-                  current_assignment=current_assignment,
-                  base_directory=base_directory,
-                  submission_file=current_submission_file)
+            # Update submission text
+            self.check_submission_file(
+                current_assignment=current_assignment,
+                base_directory=base_directory,
+                submission_file=current_submission_file)
 
-                # Update t-square timestamp
-                self.compare_timestamp_file(
-                  current_assignment=current_assignment,
-                  base_directory=base_directory)
+            # Update t-square timestamp
+            self.compare_timestamp_file(
+                current_assignment=current_assignment,
+                base_directory=base_directory)
 
-                # Clone repo if needed
-                # NOTE: You'll need to authenticate with github here and
-                # debuggers may not work properly
-                self.setup_student_repo(gt_student_id)
+            # Clone repo if needed
+            # NOTE: You'll need to authenticate with github here and
+            # debuggers may not work properly
+            self.setup_student_repo(gt_student_id)
 
-                # Only check commit ID validity with GitHub timestamp
-                if self.is_commit_present(current_assignment['commitID']):
+            # Only check commit ID validity with GitHub timestamp
+            if self.is_commit_present(current_assignment['commitID']):
 
-                    # Try to check out commit ID
-                    self.check_commit_ID(current_assignment, gt_student_id)
+                # Try to check out commit ID
+                self.check_commit_ID(current_assignment, gt_student_id)
 
-                    self.compare_timestamp_github(
-                      current_assignment, gt_student_id, deadline)
+                self.compare_timestamp_github(
+                    current_assignment, gt_student_id, deadline)
 
-                # Check T-Square timestamp against deadline
-                self.compare_timestamp_t_square(current_assignment, deadline)
+            # Check T-Square timestamp against deadline
+            self.compare_timestamp_t_square(current_assignment, deadline)
 
-                # Save Result
-                student_dict[t_square_id] = current_student
+            # Save Result
+            student_dict[t_square_id] = current_student
 
-            if student_dict is not None:
+        if student_dict is not None:
 
-                # Save info
-                with open(self.student_records_filename, 'w') as output_file:
-                    json.dump(student_dict, output_file)
+            # Save info
+            with open(self.student_records_filename, 'w') as output_file:
+                json.dump(student_dict, output_file)
 
         if self.is_team and student_whitelist:
             self.process_team_repos(assignment_alias, student_whitelist)
 
+
     def process_team_repos(self, assignment_alias, student_whitelist):
 
-        team_dict = self.get_file_dict(self.team_members_filename)
-        aliases = self.get_file_dict(self.student_alias_filename)
+        aliases = self.get_file_dict(
+          self.student_alias_filename,
+          inspect.currentframe().f_code.co_name)
 
-        try:
+        student_dict = self.get_file_dict(
+          self.student_records_filename,
+          inspect.currentframe().f_code.co_name,
+          "Run create_student_json first.")
 
-            student_dict = None
+        team_dict = self.get_file_dict(
+          self.team_members_filename,
+          inspect.currentframe().f_code.co_name)
 
-            with open(self.student_records_filename, 'r+') as (
-              student_records_file):
+        for team in student_whitelist:
 
-                student_dict = json.load(student_records_file)
+            member_list, commit_list = team_dict[team], []
 
-        except IOError:
-            raise IOError("%s: Missing student records file '%s'. "
-                          "Run create_student_json first. Exiting." % (
-                            inspect.currentframe().f_code.co_name,
-                            self.student_records_filename))
-        else:
-            for team in student_whitelist:
+            for student in member_list:
 
-                member_list, commit_list = team_dict[team], []
+                t_square_id = aliases[student]
+                team_assignment = (
+                    student_dict[t_square_id][assignment_alias])
 
-                for student in member_list:
+                try:
+                    commit_time = team_assignment['Timestamp GitHub']
+                    commit_ID = team_assignment['commitID']
 
-                    t_square_id = aliases[student]
-                    team_assignment = (
-                        student_dict[t_square_id][assignment_alias])
+                except KeyError:
+                    continue
 
-                    try:
-                        commit_time = team_assignment['Timestamp GitHub']
-                        commit_ID = team_assignment['commitID']
+                if (self.is_commit_present(commit_ID) and
+                        commit_time != 'N/A'):
 
-                    except KeyError:
-                        continue
+                    commit_list.append((commit_time, commit_ID))
 
-                    if (self.is_commit_present(commit_ID) and
-                            commit_time != 'N/A'):
+            # checkout most recent commit here
+            if len(commit_list) > 0:
 
-                        commit_list.append((commit_time, commit_ID))
+                # Most recent should be first
+                commit_list.sort(reverse=True)
+                _, most_recent_commit = commit_list[0]
 
-                # checkout most recent commit here
-                if len(commit_list) > 0:
+                command_checkout = (
+                    'cd %s; git checkout %s;' % (
+                    self.gen_prefixed_dir(team), most_recent_commit))
 
-                    # Most recent should be first
-                    commit_list.sort(reverse=True)
-                    _, most_recent_commit = commit_list[0]
+                _ = self.execute_command(command_checkout)
 
-                    command_checkout = (
-                        'cd %s; git checkout %s;' % (
-                        self.gen_prefixed_dir(team), most_recent_commit))
-
-                    _ = self.execute_command(command_checkout)
-
-                else:
-                    print("%s: NO VALID COMMITS FOR %s!" % (
-                        inspect.currentframe().f_code.co_name, team))
+            else:
+                print("%s: NO VALID COMMITS FOR %s!" % (
+                    inspect.currentframe().f_code.co_name, team))
 
 
     def get_correct_reference_id(self, graded_id):
@@ -306,7 +291,8 @@ class Submissions(object):
 
         if self.is_team:
 
-            team_dict = self.get_file_dict(self.team_records_filename)
+            team_dict = self.get_file_dict(
+              self.team_records_filename, inspect.currentframe().f_code.co_name)
 
             try:
                 team_id = team_dict[graded_id]
@@ -324,12 +310,17 @@ class Submissions(object):
             return graded_id
 
 
-    def get_file_dict(self, filename):
+    def get_file_dict(self, filename, caller_name='', epilog=''):
         r"""
         Attempts to access the file and retrieve the JSON within it.
 
         Arguments:
           filename:   (str) The name of the file we will open.
+
+          caller_name:   (str) This is the caller's function name when
+            printing errors.
+
+          epilog:   (str) This is the epilog error message if one is needed.
 
         NOTE:
           For Python, JSON and the native Python dictionary are one and the
@@ -351,8 +342,8 @@ class Submissions(object):
 
             except IOError:
                 raise IOError(
-                  "%s: Couldn't open file '%s'" % (
-                    inspect.currentframe().f_code.co_name, filename))
+                  "%s: Missing file '%s'%s Exiting." % (
+                    caller_name, filename, epilog))
 
         #else:
 
@@ -363,7 +354,8 @@ class Submissions(object):
 
         if self.is_team:
 
-            team_dict = self.get_file_dict(self.team_members_filename)
+            team_dict = self.get_file_dict(
+              self.team_members_filename, inspect.currentframe().f_code.co_name)
 
             # Read data in student_whitelist
             student_whitelist_multi_list = [team_dict[team] for team in student_whitelist]
@@ -372,8 +364,10 @@ class Submissions(object):
 
             # student_whitelist now contains student GTIDs instead of just team names
 
-        t_square_aliases = self.get_file_dict(self.student_alias_filename)
-        student_info = self.get_file_dict(self.student_records_filename)
+        t_square_aliases = self.get_file_dict(
+          self.student_alias_filename, inspect.currentframe().f_code.co_name)
+        student_info = self.get_file_dict(
+          self.student_records_filename, inspect.currentframe().f_code.co_name)
 
         folders = []
 
@@ -721,7 +715,10 @@ class Submissions(object):
 
             if self.is_team:
 
-                team_dict = self.get_file_dict(self.team_members_filename)
+                team_dict = self.get_file_dict(
+                  self.team_members_filename,
+                  inspect.currentframe().f_code.co_name)
+
                 new_student_list = []
 
                 for team in student_list:
