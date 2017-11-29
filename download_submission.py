@@ -14,7 +14,8 @@ assignment to download it.
 """
 
 
-__author__ = ["David Tran", "Travis Janssen"]
+__author__ = "David Tran, Travis Janssen"
+__credits__ = ["David Tran", "Travis Janssen"]
 __status__ = "Production"
 __version__ = "1.0.0"
 
@@ -95,7 +96,8 @@ def get_assignment_info(assignment_name):
 
         try:
 
-            return [line.strip() for line in open(filename)]
+            # The input may be in unicode so we filter that and strip it
+            return list(map(str.strip, map(str, open(filename))))
 
         except IOError:
 

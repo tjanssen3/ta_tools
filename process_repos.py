@@ -1,11 +1,16 @@
 ##!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
+r"""
 For the purposes of this file, we assume that a student is either a student
 or a team to make parsing easier, since most of the logic is identical.
 
-Created by Travis Janssen and David Tran
 """
+
+
+__author__ = "David Tran, Travis Janssen"
+__credits__ = ["David Tran", "Travis Janssen"]
+__status__ = "Production"
+__version__ = "1.0.0"
 
 from collections import defaultdict
 
@@ -26,7 +31,7 @@ class Submissions(object):
 
 
     def __init__(self, is_team, should_git_pull):
-        """
+        r"""
         Defines the variables for the current class.
 
         We could define static variables but they are not private and
@@ -72,7 +77,7 @@ class Submissions(object):
 
 
     def create_student_json(self, input_filename):
-        """
+        r"""
         Converts the input file to two useful JSON files specifically
         for student grading.
 
@@ -126,14 +131,16 @@ class Submissions(object):
 
         students = None
 
+
         try:
+
             with open(self.student_records_filename, 'r+') as (
               student_records_file):
 
                 students = json.load(student_records_file)
 
                 if whitelist is None:
-                    folders = filter(os.path.isdir, os.listdir(submission_folder_name))
+                    folders = list(filter(os.path.isdir, os.listdir(submission_folder_name)))
                 else:
                     folders = self.get_student_folder_names_from_list(
                       whitelist)
@@ -188,6 +195,7 @@ class Submissions(object):
 
             # check out most recent commit
             if self.is_team and whitelist is not None:
+
                 teams = self.get_file_dict(self.team_members_filename)
                 aliases = self.get_file_dict(self.student_alias_filename)
 
@@ -218,19 +226,15 @@ class Submissions(object):
                     # checkout most recent commit here
                     if len(commits) > 0:
 
-                        try:
-                            command_checkout = (
-                              'cd %s; git checkout %s;' % (
-                                self.gen_prefixed_dir(team),
-                                most_recent_commit))
+                        command_checkout = (
+                          'cd %s; git checkout %s;' % (
+                            self.gen_prefixed_dir(team), most_recent_commit))
 
-                            _ = self.execute_command(command_checkout)
-
-                        except subprocess.CalledProcessError:
-                            raise subprocess.CalledProcessError
+                        _ = self.execute_command(command_checkout)
 
                     else:
-                        print("NO VALID COMMITS FOR %s!" % team)
+                        print("%s: NO VALID COMMITS FOR %s!" % (
+                          inspect.currentframe().f_code.co_name, team))
 
         except IOError:
             raise IOError("%s: Missing student records file '%s'. "
@@ -272,7 +276,7 @@ class Submissions(object):
 
         else:
 
-            # This is a student ID
+            # This is the student ID
             return graded_id
 
 
@@ -313,6 +317,7 @@ class Submissions(object):
 
     def get_student_folder_names_from_list(self, whitelist):
 
+
         if self.is_team:
 
             team_dict = self.get_file_dict(self.team_members_filename)
@@ -329,6 +334,7 @@ class Submissions(object):
 
         folders = []
 
+
         for student in whitelist:
 
             try:
@@ -343,10 +349,12 @@ class Submissions(object):
 
         return folders
 
+
     def check_submission_file(self, current_student, t_square_id,
                               submission_folder_name, folder, assignment_alias):
 
         try:
+
             submission_file = '%s(%s)_submissionText.html' % (
               current_student['name'], t_square_id)
 
@@ -354,11 +362,12 @@ class Submissions(object):
 
                 strings = re.findall(r'([0-9A-Za-z]{40})', submission_info.read())
 
-                if len(strings) == 0:
+                if not len(strings):
                     current_student[assignment_alias]['commitID'] = self.STR_INVALID
 
                 else:
                     current_student[assignment_alias]['commitID'] = strings[0]    # tiebreak: use first in list
+
         except IOError:
             current_student[assignment_alias]['commitID'] = self.STR_MISSING
 
@@ -368,21 +377,27 @@ class Submissions(object):
                              folder, assignment_alias):
 
         try:
+
             target_filename = os.path.join(
               submission_folder_name, folder, self.timestamp_filename)
 
             with open(target_filename, 'r') as timestamp_info:
+
                 timestamp = timestamp_info.read()
                 current_student[assignment_alias]['Timestamp T-Square'] = timestamp
 
         except IOError:
+
             current_student[assignment_alias]['Timestamp T-Square'] = "Missing"
             current_student[assignment_alias]['commitID'] = "Missing"
+
 
         return current_student
 
 
     def setup_student_repo(self, current_student):
+
+        just_cloned_repo = None
 
         repo_suffix = self.get_correct_reference_id(current_student['gt_id'])
 
@@ -419,20 +434,28 @@ class Submissions(object):
         except subprocess.CalledProcessError, e:
 
             try:
-                logger.error("%s subprocess.CalledProcessError: %s\n",
+                logger.error("%s: student '%s' subprocess.CalledProcessError: "
+                             "%s\n",
+                             inspect.currentframe().f_code.co_name,
                              current_student['gt_id'], str(e.output))
 
             except UnicodeDecodeError:
-                logger.error("%s subprocess.CalledProcessError: "
-                             "UnicodeDecodeError\n", current_student['gt_id'])
+                logger.error("%s: student '%s' subprocess.CalledProcessError: "
+                             "UnicodeDecodeError\n",
+                             inspect.currentframe().f_code.co_name,
+                             current_student['gt_id'])
+
 
     def compare_timestamp_github(self, current_student,
                                assignment_alias, deadline):
 
         if not current_student[assignment_alias]['commitID valid']:
+
             current_student[assignment_alias]['Submission GitHub'] = 'N/A'
             current_student[assignment_alias]['Timestamp GitHub'] = 'N/A'
+
         else:
+
             repo_suffix = self.get_correct_reference_id(current_student['gt_id'])
 
             # check timestamp of GitHub commit
@@ -453,8 +476,9 @@ class Submissions(object):
 
         return current_student
 
+
     def fix_timestamp_t_square(self, time_str):
-        """
+        r"""
         This function guarantees that converting t_square time is done exactly
         one so multiple calls won't accidentally convert it twice.
 
@@ -496,10 +520,8 @@ class Submissions(object):
 
             current_student[assignment_alias]['Timestamp T-Square'] = final_time
 
-            if final_time <= deadline:
-                current_student[assignment_alias]['Submission T-Square'] = self.STR_OK
-            else:
-                current_student[assignment_alias]['Submission T-Square'] = self.STR_LATE
+            msg = self.STR_OK if final_time <= deadline else self.STR_LATE
+            current_student[assignment_alias]['Submission T-Square'] = msg
 
         return current_student
 
@@ -538,29 +560,32 @@ class Submissions(object):
 
     def check_commit_ID(self, current_student, assignment_alias):
 
-        key = current_student['gt_id']
-        repo_suffix = self.get_correct_reference_id(key)
+        graded_id = current_student['gt_id']
+        repo_suffix = self.get_correct_reference_id(graded_id=graded_id)
 
-        # CD First?
-        command_checkout = ('cd %s; git checkout %s; git log --pretty=format:\'%%H\' -n 1; cd -' %
-                            (self.gen_prefixed_dir(repo_suffix),
-                             current_student[assignment_alias]['commitID']))
+        command_checkout = (
+          'cd %s; git checkout %s;'
+          'git show --pretty=format:\'%%H\' --no-patch; cd - &> /dev/null' % (
+            self.gen_prefixed_dir(repo_suffix),
+            current_student[assignment_alias]['commitID']))
+
         output_checkout = self.execute_command(command_checkout)
 
-        if self.OS_TYPE == 'Windows':
-            commit = output_checkout[1:len(output_checkout)-1] # windows returns \\ prefix and suffix
-        else:
-            commit = output_checkout.split('/')[0]
+            # Windows returns \\ prefix and suffix so strip it
 
-        current_student[assignment_alias]['commitID valid'] = commit == current_student[assignment_alias]['commitID']
+        if self.OS_TYPE == 'Windows':
+            commit = output_checkout[1:-1]
+        else:
+            commit = output_checkout
+
+        valid_commit = commit == current_student[assignment_alias]['commitID']
+        current_student[assignment_alias]['commitID valid'] = valid_commit
 
         return current_student
 
 
     def should_pull_repo(self, team_number):
         r"""
-        LOGIC CHECK Redundancy
-
         Checks if we should pull a repo or assume it has been pulled already.
 
         This is only appliaple for team projects as multiple students work
@@ -581,8 +606,11 @@ class Submissions(object):
         should_pull = True
 
         if self.is_team:
+
             if team_number in self.cached_teams_pulled:
+
                 should_pull = False
+
             # else:
 
             self.cached_teams_pulled.add(team_number)
@@ -603,8 +631,10 @@ class Submissions(object):
 
 
         if self.OS_TYPE == 'Windows':
+
             # Windows chains commands with &, *nix with ;
             command = command.replace(';', '&')
+
             # Windows doesn't support 'go back to last directory'
             command = command[:command.index('& cd -')]
 
@@ -645,6 +675,18 @@ class Submissions(object):
             with open(self.student_records_filename, 'r') as records_file:
                 student_records = json.load(records_file)
 
+        except IOError:
+
+            msg = (("%s: couldn't find %s or %s."
+                    "Try running create_student_json first.") % (
+                      inspect.currentframe().f_code.co_name,
+                      self.student_alias_filename,
+                      self.student_records_filename
+                      ))
+            raise IOError(msg)
+
+        else:
+
             bad_commit, late_github, late_t_square, missing = [], [], [], []
 
             init_log(log_filename=report_filename)
@@ -652,37 +694,44 @@ class Submissions(object):
 
             if self.is_team:
 
-                teams = self.get_file_dict(self.team_members_filename)
-
+                team_dict = self.get_file_dict(self.team_members_filename)
                 new_student_list = []
 
                 for team in student_list:
 
-                    members_list = teams[team]
+                    members_list = team_dict[team]
 
                     new_student_list.append(team)
                     new_student_list.extend(members_list)
 
                 student_list = new_student_list
 
-            elif student_list is None or not student_list:
+            elif not student_list:
+
                 student_list = student_aliases.keys() # all student_list!
-            else:
-                pass # Do nothing
 
+            #else:
 
-            for student in student_list:
+            # Parse the student list for bad elements
+            stripped_list = map(str.strip, map(str, student_list))
+            final_list = list(filter(bool, stripped_list))
 
-                if not student: # ignore whitespace/blank lines
-                    continue
+            bad_student_dict = {
+              'Submission GitHub': ('late', late_github),
+              'Submission T-Square': ('late', late_t_square),
+              'commitID': ('Missing', missing),
+              'commitID valid': (False, bad_commit)
+            }
 
-                if self.is_team and "Team" in student:
+            for student in final_list:
+
+                if self.is_team and 'Team' in student:
                     logger.info("\n========== %s ==========", student)
                     continue
+                else:
+                    logger.info(student)
 
                 student_info = student_records[student_aliases[student]]
-
-                logger.info(student)
 
                 if assignment not in student_info:
 
@@ -691,27 +740,23 @@ class Submissions(object):
                     continue
 
                 student_info_assignment = student_info[assignment]
+
                 for key in sorted(student_info_assignment.keys(), reverse=True):
 
-                    student_info_assignment_key = student_info_assignment[key]
-                    logger.info('\t%s: %s', key, student_info_assignment_key)
+                    student_info_assignment_value = student_info_assignment[key]
+                    logger.info('\t%s: %s', key, student_info_assignment_value)
 
-                    for target_key, target_value, target_list in [
-                      ('Submission GitHub', 'late', late_github),
-                      ('Submission T-Square', 'late', late_t_square),
-                      ('commitID', 'Missing', missing),
-                      ('commitID valid', False, bad_commit)
-                      ]:
-
-                        if (key == target_key and
-                            student_info_assignment_key == target_value):
-
+                    try:
+                        target_value, target_list = bad_student_dict[key]
+                        if target_value == student_info_assignment_value:
                             target_list.append(student)
+
+                    except KeyError:
+                        pass
 
 
             logger.info("\n========== RESULTS ==========")
-            str_buffer = []
-            str_buffer.append("\nLATE SUBMISSIONS:")
+            str_buffer = ["\nLATE SUBMISSIONS:"]
             for fmt_str, data in [("\tT-Square (%d): %s", late_t_square),
                                   ("\tGitHub (%d): %s", late_github),
                                   ("\nMISSING SUBMISSIONS (%s): %s", missing),
@@ -720,14 +765,6 @@ class Submissions(object):
                 str_buffer.append(fmt_str % (len(data), ", ".join(data)))
 
             logger.info("\n".join(str_buffer))
-
-
-        except IOError:
-            msg = (("generate_report couldn't find %s file."
-                    "Try running create_student_json first.") %
-                   self.student_alias_filename)
-            print(msg)
-            raise IOError(msg)
 
 
     def gen_prefixed_dir(self, prefix_str):
