@@ -5,6 +5,9 @@ r"""
 For the purposes of this file, we assume that a student is either a student
 or a team to make parsing easier, since most of the logic is identical.
 
+See download_submission.process_assignment to see how to utilize this class
+correctly.
+
 TODO: Many of the methods of process_repos should be combined?
 """
 
@@ -131,23 +134,25 @@ class Submissions(object):
                 inspect.currentframe().f_code.co_name, submission_folder_name))
 
         if self.is_team:
-            team_dict = self._get_file_dict(
-              self.team_records_filename, inspect.currentframe().f_code.co_name)
+            team_records = self._get_file_dict(
+              filename=self.team_records_filename,
+              caller_name=inspect.currentframe().f_code.co_name)
 
-        student_dict = self._get_file_dict(
-          self.student_records_filename,
-          inspect.currentframe().f_code.co_name,
-          "Run create_student_json first.")
+        student_records = self._get_file_dict(
+          filename=self.student_records_filename,
+          caller_name=inspect.currentframe().f_code.co_name,
+          epilog="Run create_student_json first.")
 
 
         directory_listing = self._get_student_folders(
-          submission_folder_name, student_whitelist)
+          submission_folder_name=submission_folder_name,
+          student_whitelist=student_whitelist)
 
         for folder in directory_listing:
 
             t_square_id = folder.split('(')[1].strip(')')
 
-            current_student = student_dict.get(t_square_id, {})
+            current_student = student_records.get(t_square_id, {})
 
             if not current_student:
                 continue
@@ -157,7 +162,7 @@ class Submissions(object):
             if ((not self.is_team and
                  gt_student_id not in student_whitelist) or
                   (self.is_team and
-                   team_dict[gt_student_id] not in student_whitelist)
+                   team_records[gt_student_id] not in student_whitelist)
                ):
 
                 continue
@@ -185,32 +190,40 @@ class Submissions(object):
             # Clone repo if needed
             # NOTE: You'll need to authenticate with Github here and
             # debuggers may not work properly
-            self._setup_student_repo(gt_student_id)
+            self._setup_student_repo(gt_student_id=gt_student_id)
 
             # Only check commit ID validity with GitHub timestamp
-            if self._is_commit_present(current_assignment['commitID']):
+            if self._is_commit_present(
+              commit_status=current_assignment['commitID']):
 
                 # Try to check out commit ID
-                self._check_commitID(current_assignment, gt_student_id)
+                self._check_commitID(
+                  current_assignment=current_assignment,
+                  gt_student_id=gt_student_id)
 
                 self._compare_timestamp_github(
-                  current_assignment, gt_student_id, deadline)
+                  current_assignment=current_assignment,
+                  gt_student_id=gt_student_id, deadline=deadline)
 
             # Check T-Square timestamp against deadline
-            self._compare_timestamp_t_square(current_assignment, deadline)
+            self._compare_timestamp_t_square(
+              current_assignment=current_assignment,
+              deadline=deadline)
 
             # Save Result
-            student_dict[t_square_id] = current_student
+            student_records[t_square_id] = current_student
 
 
-        if student_dict is not None:
+        if student_records is not None:
 
             # Save info
             with open(self.student_records_filename, 'w') as output_file:
-                json.dump(student_dict, output_file)
+                json.dump(student_records, output_file)
 
         if self.is_team and student_whitelist:
-            self._process_team_repos(assignment_alias, student_whitelist)
+            self._process_team_repos(
+              assignment_alias=assignment_alias,
+              student_whitelist=student_whitelist)
 
 
     def _process_team_repos(self, assignment_alias, student_whitelist):
@@ -230,41 +243,41 @@ class Submissions(object):
         """
 
 
-        aliases = self._get_file_dict(
-          self.student_alias_filename,
-          inspect.currentframe().f_code.co_name)
+        student_aliases = self._get_file_dict(
+          filename=self.student_alias_filename,
+          caller_name=inspect.currentframe().f_code.co_name)
 
-        student_dict = self._get_file_dict(
-          self.student_records_filename,
-          inspect.currentframe().f_code.co_name,
-          "Run create_student_json first.")
+        student_records = self._get_file_dict(
+          filename=self.student_records_filename,
+          caller_name=inspect.currentframe().f_code.co_name,
+          epilog="Run create_student_json first.")
 
-        team_dict = self._get_file_dict(
-          self.team_members_filename,
-          inspect.currentframe().f_code.co_name)
+        team_records = self._get_file_dict(
+          filename=self.team_members_filename,
+          caller_name=inspect.currentframe().f_code.co_name)
 
 
         for team in student_whitelist:
 
-            member_list, commit_list = team_dict[team], []
+            member_list, commit_list = team_records[team], []
 
             for student in member_list:
 
-                t_square_id = aliases[student]
+                t_square_id = student_aliases[student]
                 team_assignment = (
-                  student_dict[t_square_id][assignment_alias])
+                  student_records[t_square_id][assignment_alias])
 
                 try:
                     commit_time = team_assignment['Timestamp GitHub']
-                    commit_ID = team_assignment['commitID']
+                    commitID = team_assignment['commitID']
 
                 except KeyError:
                     continue
 
-                if (self._is_commit_present(commit_ID) and
+                if (self._is_commit_present(commit_status=commitID) and
                       commit_time != self.STR_NA):
 
-                    commit_list.append((commit_time, commit_ID))
+                    commit_list.append((commit_time, commitID))
 
 
             # checkout most recent commit here
@@ -274,14 +287,14 @@ class Submissions(object):
                 commit_list.sort(reverse=True)
                 _, most_recent_commit = commit_list[0]
 
-                command_checkout = (
+                command = (
                   'cd %s; git checkout %s;' % (
                     self._gen_prefixed_dir(team), most_recent_commit))
 
-                _ = self._execute_command(command_checkout)
+                _ = self._execute_command(command=command)
 
             else:
-                print("%s: NO VALID COMMITS FOR %s!" % (
+                print("%s: No valid commeit for team '%s'!" % (
                   inspect.currentframe().f_code.co_name, team))
 
 
@@ -297,16 +310,16 @@ class Submissions(object):
 
 
         just_cloned_repo = None
-        repo_suffix = self._get_correct_reference_id(gt_student_id)
+        repo_suffix = self._get_correct_reference_id(graded_id=gt_student_id)
 
-        if not os.path.isdir(self._gen_prefixed_dir(repo_suffix)):
+        if not os.path.isdir(self._gen_prefixed_dir(prefix_str=repo_suffix)):
 
             command = ('cd %s; '
                        'git clone https://github.gatech.edu/%s/%s%s.git; '
                        'cd ..') % (
                          self.MAIN_REPO_DIR, self.GIT_CONTEXT,
                          self.FOLDER_PREFIX, repo_suffix)
-            _ = self._execute_command(command)
+            _ = self._execute_command(command=command)
 
             self.cached_teams_pulled.add(repo_suffix)
             just_cloned_repo = True
@@ -325,11 +338,11 @@ class Submissions(object):
 
                 pull_flag = 'git pull &&'
 
-            command_setup = (
+            command = (
               'cd %s && git clean -fd && %s git reset --hard HEAD' % (
-                self._gen_prefixed_dir(repo_suffix), pull_flag))
+                self._gen_prefixed_dir(prefix_str=repo_suffix), pull_flag))
 
-            _ = self._execute_command(command_setup)
+            _ = self._execute_command(command=command)
 
 
         # TODO: Unneeded?
@@ -370,13 +383,13 @@ class Submissions(object):
 
 
         student_aliases = self._get_file_dict(
-          self.student_alias_filename,
-          inspect.currentframe().f_code.co_name)
+          filename=self.student_alias_filename,
+          caller_name=inspect.currentframe().f_code.co_name)
 
         student_records = self._get_file_dict(
-          self.student_records_filename,
-          inspect.currentframe().f_code.co_name,
-          "Run create_student_json first.")
+          filename=self.student_records_filename,
+          caller_name=inspect.currentframe().f_code.co_name,
+          epilog="Run create_student_json first.")
 
 
         bad_commit, late_github, late_t_square, missing = [], [], [], []
@@ -386,15 +399,15 @@ class Submissions(object):
 
         if self.is_team:
 
-            team_dict = self._get_file_dict(
-              self.team_members_filename,
-              inspect.currentframe().f_code.co_name)
+            team_records = self._get_file_dict(
+              filename=self.team_members_filename,
+              caller_name=inspect.currentframe().f_code.co_name)
 
             new_student_list = []
 
             for team in student_list:
 
-                members_list = team_dict[team]
+                members_list = team_records[team]
 
                 new_student_list.append(team)
                 new_student_list.extend(members_list)
@@ -504,7 +517,7 @@ class Submissions(object):
 
             with open(input_filename, 'r') as input_file:
 
-                gt_id_dict, student_dict = {}, {}
+                gt_id_dict, student_records = {}, {}
 
                 for line in input_file:
 
@@ -512,7 +525,8 @@ class Submissions(object):
 
                     name, gt_id, t_square_id = parsed_line[0:3]
 
-                    student_dict[t_square_id] = {'name': name, 'gt_id': gt_id}
+                    student_records[t_square_id] = {
+                      'name': name, 'gt_id': gt_id}
                     gt_id_dict[gt_id] = t_square_id
 
         except IOError:
@@ -522,7 +536,7 @@ class Submissions(object):
 
 
         with open(self.student_records_filename, 'w') as output_file:
-            json.dump(student_dict, output_file)
+            json.dump(student_records, output_file)
         with open(self.student_alias_filename, 'w') as alias_file:
             json.dump(gt_id_dict, alias_file)
 
@@ -545,11 +559,12 @@ class Submissions(object):
 
         if self.is_team:
 
-            team_dict = self._get_file_dict(
-              self.team_records_filename, inspect.currentframe().f_code.co_name)
+            team_records = self._get_file_dict(
+              filename=self.team_records_filename,
+              caller_name=inspect.currentframe().f_code.co_name)
 
             try:
-                team_id = team_dict[graded_id]
+                team_id = team_records[graded_id]
 
             except IndexError:
                 raise IndexError(
@@ -629,22 +644,27 @@ class Submissions(object):
 
         if self.is_team:
 
-            team_dict = self._get_file_dict(
-              self.team_members_filename, inspect.currentframe().f_code.co_name)
+            team_records = self._get_file_dict(
+              filename=self.team_members_filename,
+              caller_name=inspect.currentframe().f_code.co_name)
 
             # Read data in student_whitelist
             student_whitelist_multi_list = [
-              team_dict[team] for team in student_whitelist]
+              team_records[team] for team in student_whitelist]
             # Flatten multi list to be a single list and store it back
             student_whitelist = list(
               itertools.chain.from_iterable(student_whitelist_multi_list))
 
             # student_whitelist now contains student GTIDs instead of team names
 
-        t_square_aliases = self._get_file_dict(
-          self.student_alias_filename, inspect.currentframe().f_code.co_name)
-        student_info = self._get_file_dict(
-          self.student_records_filename, inspect.currentframe().f_code.co_name)
+        student_aliases = self._get_file_dict(
+          filename=self.student_alias_filename,
+          caller_name=inspect.currentframe().f_code.co_name)
+
+        student_records = self._get_file_dict(
+          filename=self.student_records_filename,
+          caller_name=inspect.currentframe().f_code.co_name,
+          epilog="Run create_student_json first.")
 
         folders = []
 
@@ -652,8 +672,8 @@ class Submissions(object):
         for student in student_whitelist:
 
             try:
-                t_square_id = t_square_aliases[student]
-                name = student_info[t_square_id]['name']
+                t_square_id = student_aliases[student]
+                name = student_records[t_square_id]['name']
 
             except IndexError:
                 logger.error(
@@ -703,17 +723,16 @@ class Submissions(object):
 
         repo_suffix = self._get_correct_reference_id(graded_id=gt_student_id)
 
-        command_checkout = (
+        command = (
           'cd %s; git checkout %s; '
           'git show --pretty=format:\'%%H\' --no-patch; cd - &> /dev/null' % (
-            self._gen_prefixed_dir(repo_suffix),
+            self._gen_prefixed_dir(prefix_str=repo_suffix),
             current_assignment['commitID']))
 
-        output_checkout = self._execute_command(command_checkout)
-
-            # Windows returns \\ prefix and suffix so strip it
+        output_checkout = self._execute_command(command=command)
 
         if self.OS_TYPE == 'Windows':
+            # Windows returns \\ prefix and suffix so strip it
             commit = output_checkout[1:-1]
         else:
             commit = output_checkout
@@ -781,7 +800,8 @@ class Submissions(object):
 
             with open(target_filename, 'r') as timestamp_info:
 
-                timestamp = self._fix_timestamp_t_square(timestamp_info.read())
+                timestamp = self._fix_timestamp_t_square(
+                  time_str=timestamp_info.read())
                 current_assignment['Timestamp T-Square'] = timestamp
 
         except IOError:
@@ -821,17 +841,18 @@ class Submissions(object):
 
         else:
 
-            repo_suffix = self._get_correct_reference_id(gt_student_id)
+            repo_suffix = self._get_correct_reference_id(
+              graded_id=gt_student_id)
 
             # check timestamp of GitHub commit
-            command_timestamp = (
+            command = (
               'cd %s; git show -s --format=%%cI %s; cd - &> /dev/null' % (
-                self._gen_prefixed_dir(repo_suffix),
+                self._gen_prefixed_dir(prefix_str=repo_suffix),
                 current_assignment['commitID']))
 
-            output_timestamp = self._execute_command(command_timestamp)
+            output_timestamp = self._execute_command(command=command)
 
-            dt_object = self._read_strict_ISO_format(output_timestamp)
+            dt_object = self._read_strict_ISO_format(time_str=output_timestamp)
             timestamp_github = dt_object.strftime(self.datetime_format)
 
             # check GitHub timestamp against deadline
@@ -861,6 +882,7 @@ class Submissions(object):
 
         """
 
+
         if current_assignment['Timestamp T-Square'] != self.STR_MISSING:
             final_time = current_assignment['Timestamp T-Square']
 
@@ -883,7 +905,7 @@ class Submissions(object):
           T-square time is one long "int" formatted as:
             > 20171006031150569
               YYYYMMDDHHMMSSSSS
-          We want to convert to strict ISO 8601 for easy comparision.
+          We want to convert to strict ISO 8601 for easier comparision.
             > 2017-10-06T03:11:50 569
               YYYY-MM-DDTHH:MM:SS ---
 
@@ -960,7 +982,8 @@ class Submissions(object):
         on the same repo.
 
         Arguments:
-          team_number:   (str or any key)
+          team_number:   (str or any key) This is the team number we will
+          check to see if we pull a repo. For non-teams, we should always pull.
 
         Return:
         A boolean saying if the repo should be pulled.
@@ -984,19 +1007,21 @@ class Submissions(object):
 
 def _init_log(log_filename=None, log_file_mode='w', fmt_str=None):
     r"""
-    Initializes the logging for this file.
+    Initializes the logging for this module.
 
-    This should not be in a class as this is unique per file (source code) nor
+    This should not be in a class as this is unique per file (module) nor
     should be this imported.
 
     This could be integrated by moving all logging commands but then all
     log names need to be unique to prevent clobbering. The default action is
-    to append but set to overwrite since it is unlikely we need previous run
-    info.
+    to append but set to overwrite since it is unlikely we need the previous
+    run info. Assume we have unique names, we will generate a lot of log
+    files which is also undesirable.
 
     Arguments:
-      log_filename:   (str) This is the log file name we are outputting to.
-        None will disable this and empty string will use the default name.
+      log_filename:   (str) This is the log filename we are outputting to.
+        None will disable this and empty string will use the default name,
+        "submission_runner.txt".
 
       log_file_mode:   (str) This sets the file bit for the output file.
 
@@ -1004,8 +1029,18 @@ def _init_log(log_filename=None, log_file_mode='w', fmt_str=None):
 
         'a':  Append (aka add to the end of the file)
 
+        Other commands may exist as this is similar to the second argument
+          in open.
+
       fmt_str:   (str) This is the format string used for the logger,
         default if set to None or empty string is just the message.
+
+        Be mindful that this shows up in very message printed.
+        An example is included to showcase what can be done.
+
+    WARNING:
+      If this is called multiple times, stdout will get multiple copies of any
+      logger call, which will create repeating lines.
 
     """
 

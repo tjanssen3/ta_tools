@@ -11,6 +11,15 @@ We read in the user input, parse it and call the back library correctly.
 Execute this program with the -h for help or the two letter code for the
 assignment to download it.
 
+NOTE:
+Correct UTC time is 'YYYY-MM-DDTHH:MM:SS±HH:SS'
+Python 2.X does not natively support timezones, %Z for datetime module.
+There are external modules that exist but for the purpose of this project,
+we will assume all times are fed in as UTC and time values from Git commits
+are normalized correctly.
+
+Do not forget about datetime's isoformat to get this result!
+
 """
 
 
@@ -37,7 +46,7 @@ def process_assignment(
         which will be used to create the directory.
 
       deadline:   (str) This is the deadline for the assignment, to
-        check if this late. The format is: 'YYYY-MM-DD HH:MM:SS'
+        check if this late. The format is: 'YYYY-MM-DDTHH:MM:SS'
 
       student_whitelist:   (list of str) This is a list of strings of
         students what we will whitelist. That is to say all students
@@ -133,7 +142,7 @@ def get_assignment_info(assignment_name):
             return None
 
 
-    # Deadline info EST + 4 hours = UTC, which is the T-Square deadline
+    # Deadline info is EST + 4 hours = UTC, which is the T-Square deadline
     assignment_dict = {
       'A1': {
         'deadline' : '2017-08-28T12:05:00',
@@ -185,24 +194,28 @@ def get_assignment_info(assignment_name):
         },
       }
 
-    # The list of possible assignment we can grab
+    # The list of possible assignments we can grab
     possible_argument_list = assignment_dict.keys()
+
+    # Remember in Python, range starts from the first value but ends in
+    # the penultimate value (not the last value!)
 
     # The list of repos we will not preform a git pull
     no_git_pull_list = ['D%d' % i for i in range(1, 5)]
 
     if assignment_name not in possible_argument_list:
-        print("ERROR: Assignment %2s is not a valid assignment" %
+        print("ERROR: Assignment %s is not a valid assignment" %
               assignment_name)
         return {}
 
     assignment_info = assignment_dict.get(assignment_name, None)
 
     if assignment_info is None:
-        print("ERROR: No assignment info for %2s set!")
+        print("ERROR: No assignment info for %s set!")
         return {}
 
 
+    # Remove white space in names so it is easier to cd on CLI
     new_assignment_name = assignment_info['assignment_name'].replace(' ', '_')
     assignment_info['assignment_name'] = new_assignment_name
 
