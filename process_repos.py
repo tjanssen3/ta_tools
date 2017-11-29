@@ -12,8 +12,6 @@ __credits__ = ["David Tran", "Travis Janssen"]
 __status__ = "Production"
 __version__ = "1.0.0"
 
-from collections import defaultdict
-
 from datetime import datetime, timedelta
 import inspect
 import json
@@ -116,9 +114,13 @@ class Submissions(object):
                 inspect.currentframe().f_code.co_name, input_filename))
 
 
-    def prep_repos(self, submission_folder_name, deadline, whitelist=None):
+    def process_repos(self, submission_folder_name,
+                      deadline, student_whitelist=None):
 
         assignment_alias = submission_folder_name.split('/')[-1]
+
+        if student_whitelist is None:
+            student_whitelist = []
 
         if not os.path.isdir(self.MAIN_REPO_DIR):
             os.makedirs(self.MAIN_REPO_DIR)
@@ -129,105 +131,133 @@ class Submissions(object):
                 inspect.currentframe().f_code.co_name, submission_folder_name))
 
         if self.is_team:
-            teams = self.get_file_dict(
-              self.team_records_filename)
-
-        students = None
+            team_dict = self.get_file_dict(self.team_records_filename)
 
 
         try:
 
+            student_dict = None
+
             with open(self.student_records_filename, 'r+') as (
               student_records_file):
 
-                students = json.load(student_records_file)
+                student_dict = json.load(student_records_file)
 
-                if whitelist is None:
-                    folders = list(filter(os.path.isdir, os.listdir(submission_folder_name)))
-                else:
-                    folders = self.get_student_folder_names_from_list(
-                      whitelist)
+        except IOError:
+            raise IOError("%s: Missing student records file '%s'. "
+                          "Run create_student_json first. Exiting." % (
+                            inspect.currentframe().f_code.co_name,
+                            self.student_records_filename))
 
-                for folder in folders:
+        else:
 
-                    parsed = folder.split('(')
-                    t_square_id = parsed[1].strip(')')
+            if student_whitelist is None:
+                directory_listing = list(
+                  filter(os.path.isdir, os.listdir(submission_folder_name)))
 
-                    current_student = students.get(t_square_id, None)
-                    current_student_id = current_student['gt_id']
-                    if current_student is None:
-                        continue
+            else:
+                directory_listing = self.get_student_folder_names_from_list(
+                  student_whitelist)
 
-                    if (whitelist is not None and (
-                      (not self.is_team and
-                       current_student_id not in whitelist) or
+
+            for folder in directory_listing:
+
+                parsed = folder.split('(')
+                t_square_id = parsed[1].strip(')')
+
+                current_student = student_dict.get(t_square_id, None)
+
+                if current_student is None:
+                    continue
+
+                gt_student_id = current_student['gt_id']
+
+                if ((not self.is_team and
+                     gt_student_id not in student_whitelist) or
                       (self.is_team and
-                       teams[current_student_id] not in whitelist)
-                      )):
-                        continue
+                       team_dict[gt_student_id] not in student_whitelist)
+                   ):
 
-                    # reset info for current assignment
-                    current_student[assignment_alias] = {}
+                    continue
 
-                    # get submission text
-                    current_student = self.check_submission_file(current_student, t_square_id, submission_folder_name, folder, assignment_alias)
+                # Checking repeated results on calls to simplify them
+                base_directory = os.path.join(submission_folder_name, folder)
+                current_assignment = current_student[assignment_alias] = {}
+                current_submission_file = (
+                  '%s(%s)_submissionText.html' % (
+                    current_student['name'], t_square_id))
 
-                    # get t-square timestamp
-                    current_student = self.compare_timestamp_file(current_student, submission_folder_name, folder, assignment_alias)
+                # get submission text
+                self.check_submission_file(
+                  current_assignment=current_assignment,
+                  base_directory=base_directory,
+                  submission_file=current_submission_file)
 
-                    # clone repo if needed - note that you'll need to authenticate with github here; debugger may not work properly
-                    self.setup_student_repo(current_student)
+                # get t-square timestamp
+                self.compare_timestamp_file(
+                  current_assignment=current_assignment,
+                  base_directory=base_directory)
 
-                    # only check commit ID validity and GitHub timestamp on valid commits
-                    if self.is_commit_present(current_student[assignment_alias]['commitID']):
-                        # try to check out commit ID
-                        current_student = self.check_commit_ID(current_student, assignment_alias)
+                # Clone repo if needed
+                # NOTE: You'll need to authenticate with github here and
+                # debuggers may not work properly
+                self.setup_student_repo(gt_student_id)
 
-                        current_student = self.compare_timestamp_github(current_student, assignment_alias, deadline)
+                # Only check commit ID validity with  GitHub timestamp
+                if self.is_commit_present(current_assignment['commitID']):
 
-                    # check T-Square timestamp against deadline
-                    current_student = self.compare_timestamp_t_square(current_student, assignment_alias, deadline)
+                    # Try to check out commit ID
+                    self.check_commit_ID(current_assignment, gt_student_id)
 
-                    # save info
-                    students[t_square_id] = current_student
+                    self.compare_timestamp_github(
+                      current_assignment, gt_student_id, deadline)
 
-            if students is not None:
+                # check T-Square timestamp against deadline
+                self.compare_timestamp_t_square(current_assignment, deadline)
+
                 # save info
+                student_dict[t_square_id] = current_student
+
+            if student_dict is not None:
+
+                # Save info
                 with open(self.student_records_filename, 'w') as output_file:
-                    json.dump(students, output_file)
+                    json.dump(student_dict, output_file)
 
-            # check out most recent commit
-            if self.is_team and whitelist is not None:
+            # Team Processing
+            if self.is_team and student_whitelist:
 
-                teams = self.get_file_dict(self.team_members_filename)
+                team_dict = self.get_file_dict(self.team_members_filename)
                 aliases = self.get_file_dict(self.student_alias_filename)
 
-                for team in whitelist:
-                    members, commits = teams[team], []
+                for team in student_whitelist:
 
-                    for student in members:
+                    member_list, commit_list = team_dict[team], []
+
+                    for student in member_list:
+
                         t_square_id = aliases[student]
-                        student_info = students[t_square_id]
+                        team_assignment = (
+                          student_dict[t_square_id][assignment_alias])
 
                         try:
-                            commit_time = student_info[assignment_alias]['Timestamp GitHub']
-                            commit_ID = student_info[assignment_alias]['commitID']
+                            commit_time = team_assignment['Timestamp GitHub']
+                            commit_ID = team_assignment['commitID']
+
                         except KeyError:
                             continue
 
-                        if self.is_commit_present(commit_ID) and commit_time != 'N/A':
-                            commits.append((commit_time, commit_ID))
+                        if (self.is_commit_present(commit_ID) and
+                              commit_time != 'N/A'):
 
-                    commits.sort(reverse=True) # most recent should be first
-
-                    try:
-                        most_recent_commit_time, most_recent_commit = commits[0]
-
-                    except IndexError:
-                        most_recent_commit = most_recent_commit_time = 'None'
+                            commit_list.append((commit_time, commit_ID))
 
                     # checkout most recent commit here
-                    if len(commits) > 0:
+                    if len(commit_list) > 0:
+
+                        # Most recent should be first
+                        commit_list.sort(reverse=True)
+                        _, most_recent_commit = commit_list[0]
 
                         command_checkout = (
                           'cd %s; git checkout %s;' % (
@@ -239,11 +269,6 @@ class Submissions(object):
                         print("%s: NO VALID COMMITS FOR %s!" % (
                           inspect.currentframe().f_code.co_name, team))
 
-        except IOError:
-            raise IOError("%s: Missing student records file '%s'. "
-                          "Run create_student_json first. Exiting." % (
-                            inspect.currentframe().f_code.co_name,
-                            self.student_records_filename))
 
 
     def get_correct_reference_id(self, graded_id):
@@ -318,19 +343,18 @@ class Submissions(object):
         return file_dict
 
 
-    def get_student_folder_names_from_list(self, whitelist):
-
+    def get_student_folder_names_from_list(self, student_whitelist):
 
         if self.is_team:
 
             team_dict = self.get_file_dict(self.team_members_filename)
 
-            # Read data in whitelist
-            whitelist_multi_list = [team_dict[team] for team in whitelist]
+            # Read data in student_whitelist
+            student_whitelist_multi_list = [team_dict[team] for team in student_whitelist]
             # Flatten multilist and store it back
-            whitelist = list(itertools.chain.from_iterable(whitelist_multi_list))
+            student_whitelist = list(itertools.chain.from_iterable(student_whitelist_multi_list))
 
-            # whitelist now contains student GTIDs instead of just team names
+            # student_whitelist now contains student GTIDs instead of just team names
 
         t_square_aliases = self.get_file_dict(self.student_alias_filename)
         student_info = self.get_file_dict(self.student_records_filename)
@@ -338,77 +362,70 @@ class Submissions(object):
         folders = []
 
 
-        for student in whitelist:
+        for student in student_whitelist:
 
             try:
                 t_square_id = t_square_aliases[student]
                 name = student_info[t_square_id]['name']
 
             except IndexError:
-                logger.error("Couldn't get folder name for student with GTID %s\n",
-                             student)
+                logger.error(
+                  "Couldn't get folder name for student with GTID %s\n",
+                  student)
 
             folders.append('%s(%s)' % (name, t_square_id))
 
         return folders
 
 
-    def check_submission_file(self, current_student, t_square_id,
-                              submission_folder_name, folder, assignment_alias):
+    def check_submission_file(self, current_assignment,
+                              base_directory, submission_file):
 
         try:
 
-            submission_file = '%s(%s)_submissionText.html' % (
-              current_student['name'], t_square_id)
+            with open(os.path.join(base_directory, submission_file), 'r') as submission_info:
 
-            with open(os.path.join(submission_folder_name, folder, submission_file), 'r') as submission_info:
+                strings = re.findall(r'([0-9A-Za-z]{40})',
+                                     submission_info.read())
 
-                strings = re.findall(r'([0-9A-Za-z]{40})', submission_info.read())
-
-                if not len(strings):
-                    current_student[assignment_alias]['commitID'] = self.STR_INVALID
-
-                else:
-                    current_student[assignment_alias]['commitID'] = strings[0]    # tiebreak: use first in list
+                commitID = strings[0] if len(strings) else self.STR_INVALID
+                current_assignment['commitID'] = commitID
 
         except IOError:
-            current_student[assignment_alias]['commitID'] = self.STR_MISSING
 
-        return current_student
+            current_assignment['commitID'] = self.STR_MISSING
 
-    def compare_timestamp_file(self, current_student, submission_folder_name,
-                             folder, assignment_alias):
+
+    def compare_timestamp_file(self, current_assignment, base_directory):
 
         try:
 
-            target_filename = os.path.join(
-              submission_folder_name, folder, self.timestamp_filename)
+            target_filename = os.path.join(base_directory,
+                                           self.timestamp_filename)
 
             with open(target_filename, 'r') as timestamp_info:
 
-                timestamp = timestamp_info.read()
-                current_student[assignment_alias]['Timestamp T-Square'] = timestamp
+                timestamp = self.fix_timestamp_t_square(timestamp_info.read())
+                current_assignment['Timestamp T-Square'] = timestamp
 
         except IOError:
 
-            current_student[assignment_alias]['Timestamp T-Square'] = "Missing"
-            current_student[assignment_alias]['commitID'] = "Missing"
+            current_assignment['Timestamp T-Square'] = "Missing"
+            current_assignment['commitID'] = "Missing"
 
 
-        return current_student
-
-
-    def setup_student_repo(self, current_student):
+    def setup_student_repo(self, gt_student_id):
 
         just_cloned_repo = None
-
-        repo_suffix = self.get_correct_reference_id(current_student['gt_id'])
+        repo_suffix = self.get_correct_reference_id(gt_student_id)
 
         if not os.path.isdir(self.gen_prefixed_dir(repo_suffix)):
 
-            command = 'cd %s; git clone https://github.gatech.edu/%s/%s%s.git; cd ..' % (
-              self.MAIN_REPO_DIR, self.GIT_CONTEXT,
-              self.FOLDER_PREFIX, repo_suffix)
+            command = ('cd %s; '
+                       'git clone https://github.gatech.edu/%s/%s%s.git; '
+                       'cd ..') % (
+                         self.MAIN_REPO_DIR, self.GIT_CONTEXT,
+                         self.FOLDER_PREFIX, repo_suffix)
             _ = self.execute_command(command)
 
             self.cached_teams_pulled.add(repo_suffix)
@@ -435,38 +452,38 @@ class Submissions(object):
 
             _ = self.execute_command(command_setup)
 
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError as error:
 
             try:
                 logger.error("%s: student '%s' subprocess.CalledProcessError: "
                              "%s\n",
                              inspect.currentframe().f_code.co_name,
-                             current_student['gt_id'], str(e.output))
+                             gt_student_id, str(error.output))
 
             except UnicodeDecodeError:
                 logger.error("%s: student '%s' subprocess.CalledProcessError: "
                              "UnicodeDecodeError\n",
                              inspect.currentframe().f_code.co_name,
-                             current_student['gt_id'])
+                             gt_student_id)
 
 
-    def compare_timestamp_github(self, current_student,
-                               assignment_alias, deadline):
+    def compare_timestamp_github(self, current_assignment,
+                                 student_id, deadline):
 
-        if not current_student[assignment_alias]['commitID valid']:
+        if not current_assignment['commitID valid']:
 
-            current_student[assignment_alias]['Submission GitHub'] = 'N/A'
-            current_student[assignment_alias]['Timestamp GitHub'] = 'N/A'
+            current_assignment['Submission GitHub'] = 'N/A'
+            current_assignment['Timestamp GitHub'] = 'N/A'
 
         else:
 
-            repo_suffix = self.get_correct_reference_id(current_student['gt_id'])
+            repo_suffix = self.get_correct_reference_id(student_id)
 
             # check timestamp of GitHub commit
             command_timestamp = (
               'cd %s; git show -s --format=%%cI %s; cd - &> /dev/null' % (
                 self.gen_prefixed_dir(repo_suffix),
-                current_student[assignment_alias]['commitID']))
+                current_assignment['commitID']))
 
             output_timestamp = self.execute_command(command_timestamp)
 
@@ -474,11 +491,9 @@ class Submissions(object):
             timestamp_github = dt_object.strftime(self.datetime_format)
 
             # check GitHub timestamp against deadline
-            current_student[assignment_alias]['Timestamp GitHub'] = timestamp_github
+            current_assignment['Timestamp GitHub'] = timestamp_github
             msg = self.STR_OK if timestamp_github < deadline else self.STR_LATE
-            current_student[assignment_alias]['Submission GitHub'] = msg
-
-        return current_student
+            current_assignment['Submission GitHub'] = msg
 
 
     def fix_timestamp_t_square(self, time_str):
@@ -516,18 +531,13 @@ class Submissions(object):
         return new_time_str
 
 
-    def compare_timestamp_t_square(self, current_student, assignment_alias, deadline):
+    def compare_timestamp_t_square(self, current_assignment, deadline):
 
-        if current_student[assignment_alias]['Timestamp T-Square'] != 'Missing':
-            t_square_time = current_student[assignment_alias]['Timestamp T-Square']
-            final_time = self.fix_timestamp_t_square(time_str=t_square_time)
-
-            current_student[assignment_alias]['Timestamp T-Square'] = final_time
+        if current_assignment['Timestamp T-Square'] != 'Missing':
+            final_time = current_assignment['Timestamp T-Square']
 
             msg = self.STR_OK if final_time <= deadline else self.STR_LATE
-            current_student[assignment_alias]['Submission T-Square'] = msg
-
-        return current_student
+            current_assignment['Submission T-Square'] = msg
 
 
     def read_strict_ISO_format(self, time_str):
@@ -562,16 +572,15 @@ class Submissions(object):
             return time_obj - timedelta(hours=hour, minutes=minute)
 
 
-    def check_commit_ID(self, current_student, assignment_alias):
+    def check_commit_ID(self, current_assignment, gt_student_id):
 
-        graded_id = current_student['gt_id']
-        repo_suffix = self.get_correct_reference_id(graded_id=graded_id)
+        repo_suffix = self.get_correct_reference_id(graded_id=gt_student_id)
 
         command_checkout = (
-          'cd %s; git checkout %s;'
+          'cd %s; git checkout %s; '
           'git show --pretty=format:\'%%H\' --no-patch; cd - &> /dev/null' % (
             self.gen_prefixed_dir(repo_suffix),
-            current_student[assignment_alias]['commitID']))
+            current_assignment['commitID']))
 
         output_checkout = self.execute_command(command_checkout)
 
@@ -582,10 +591,8 @@ class Submissions(object):
         else:
             commit = output_checkout
 
-        valid_commit = commit == current_student[assignment_alias]['commitID']
-        current_student[assignment_alias]['commitID valid'] = valid_commit
-
-        return current_student
+        valid_commit = commit == current_assignment['commitID']
+        current_assignment['commitID valid'] = valid_commit
 
 
     def should_pull_repo(self, team_number):
@@ -743,6 +750,7 @@ class Submissions(object):
                     logger.info('\tNo records found')
                     missing.append(student)
                     continue
+
 
                 student_info_assignment = student_info[assignment]
 

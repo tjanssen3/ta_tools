@@ -54,10 +54,10 @@ def process_submission(
     submissions = process_repos.Submissions(
       is_team=is_team, should_pull_repo_flag=should_pull_repo_flag)
 
-    submissions.prep_repos(
+    submissions.process_repos(
       submission_folder_name=('./submissions/%s' % assignment_name),
       deadline=deadline,
-      whitelist=student_whitelist)
+      student_whitelist=student_whitelist)
 
     submissions.generate_report(
       assignment=assignment_name,
@@ -78,7 +78,6 @@ def get_assignment_info(assignment_name):
 
     Returns:
       A dictionary with keys
-
     """
 
 
