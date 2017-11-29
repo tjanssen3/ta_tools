@@ -439,7 +439,6 @@ class Submissions(object):
             _ = self.execute_command(command)
 
             self.cached_teams_pulled.add(repo_suffix)
-
             just_cloned_repo = True
 
         else:
@@ -462,23 +461,21 @@ class Submissions(object):
 
             _ = self.execute_command(command_setup)
 
+        # TODO: Unneeded
         except subprocess.CalledProcessError as error:
 
             try:
-                logger.error("%s: student '%s' subprocess.CalledProcessError: "
-                             "%s\n",
-                             inspect.currentframe().f_code.co_name,
-                             gt_student_id, str(error.output))
+                print("%s: student '%s' subprocess.CalledProcessError: %s\n",
+                      inspect.currentframe().f_code.co_name,
+                      gt_student_id, str(error.output))
 
             except UnicodeDecodeError:
-                logger.error("%s: student '%s' subprocess.CalledProcessError: "
-                             "UnicodeDecodeError\n",
-                             inspect.currentframe().f_code.co_name,
-                             gt_student_id)
+                print("%s: student '%s' subprocess.CalledProcessError: "
+                      "UnicodeDecodeError\n",
+                      inspect.currentframe().f_code.co_name, gt_student_id)
 
 
-    def compare_timestamp_github(self, current_assignment,
-                                 student_id, deadline):
+    def compare_timestamp_github(self, current_assignment, student_id, deadline):
 
         if not current_assignment['commitID valid']:
 
