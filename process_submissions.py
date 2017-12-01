@@ -128,7 +128,6 @@ class Submissions(object):
 
 
         result = re.match(self.REGEX_PATTERN, deadline)
-
         if result is None:
             str_buffer = (
               "%s: input deadline is not a properly formatted ISO 8601 date\n"
@@ -143,9 +142,6 @@ class Submissions(object):
 
         assignment_alias = submission_folder_name.split('/')[-1]
 
-        if student_whitelist is None:
-            student_whitelist = []
-
         if not os.path.isdir(self.MAIN_REPO_DIR):
             os.makedirs(self.MAIN_REPO_DIR)
 
@@ -153,6 +149,17 @@ class Submissions(object):
             raise IOError(
               "%s: Submission folder name '%s' not found. Exiting." % (
                 inspect.currentframe().f_code.co_name, submission_folder_name))
+
+
+        # Guarantee that we will process something if we have an empty list
+        if not student_whitelist:
+
+            student_aliases = self._get_file_dict(
+              filename=self.STUDENT_ALIAS_FILENAME,
+              caller_name=inspect.currentframe().f_code.co_name)
+
+            student_whitelist = student_aliases.keys() # Get all students
+
 
         if self.is_team:
             team_records = self._get_file_dict(
@@ -168,6 +175,7 @@ class Submissions(object):
         directory_listing = self._get_student_folders(
           submission_folder_name=submission_folder_name,
           student_whitelist=student_whitelist)
+
 
         for folder in directory_listing:
 
@@ -267,6 +275,7 @@ class Submissions(object):
         student_aliases = self._get_file_dict(
           filename=self.STUDENT_ALIAS_FILENAME,
           caller_name=inspect.currentframe().f_code.co_name)
+
 
         student_records = self._get_file_dict(
           filename=self.STUDENT_RECORDS_FILENAME,

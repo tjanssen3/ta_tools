@@ -239,7 +239,7 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None):
     report_filename = 'report_%s_%s.txt' % (assignment_name, prefix)
 
     student_filename = ('team.txt' if is_team else
-                        'student_%s.txt' % assignment_name)
+                        'students_%s.txt' % assignment_name)
     student_whitelist = get_students_list_from_file(filename=student_filename)
 
     assignment_info['is_team'] = is_team
