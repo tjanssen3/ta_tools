@@ -144,3 +144,26 @@ class TestSubmissions(TestCase):
         self.generate_report_for_assignment(assignment, deadline, report_name, students, is_team_project=True,
                                             pull_from_github=False)
 
+    def test_generate_individual_project_D1_report(self):
+        deadline = "2017-11-11 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Individual Project, Deliverable 1"
+        report_name = "report_individual_project_D1_my_students.txt"
+        students = self.get_students_list_from_file('students_individual_project.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students)
+
+    def test_generate_individual_project_D2_report(self):
+        deadline = "2017-11-18 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Individual Project, Deliverable 2"
+        report_name = "report_individual_project_D2_my_students.txt"
+        students = self.get_students_list_from_file('students_individual_project.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, pull_from_github=False)
+
+    def test_generate_individual_project_D3_report(self):
+        deadline = "2017-12-02 12:05:00"  # EST + 4 hours = UTC, which is the T-Square deadline
+        assignment = "Individual Project, Deliverable 3"
+        report_name = "report_individual_project_D3_my_students.txt"
+        students = self.get_students_list_from_file('students_individual_project.txt')
+
+        self.generate_report_for_assignment(assignment, deadline, report_name, students, pull_from_github=False)

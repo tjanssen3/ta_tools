@@ -246,7 +246,7 @@ class Submissions:
                     current_student[assignment_alias]['commitID'] = "Invalid"
                 else:
                     current_student[assignment_alias]['commitID'] = strings[0]  # tiebreak: use first in list
-        except IOError:
+        except IOError as e:
             current_student[assignment_alias]['commitID'] = "Missing"
 
         return current_student
