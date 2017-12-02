@@ -10,7 +10,6 @@ correctly.
 
 TODO:
   * Many of the methods of process_repos should be combined?
-  * We should implement git tags for group projects
 """
 
 
@@ -32,7 +31,6 @@ import subprocess
 
 import logging
 logger = logging.getLogger(__name__)
-
 
 class Submissions(object):
     r"""
@@ -99,7 +97,7 @@ class Submissions(object):
 
 
     def process_repos(self, submission_folder_name,
-                      deadline, student_whitelist=None):
+                      assignment_code, deadline, student_whitelist=None):
         """
         This is the core function that will automate the download of
         student submissions.
@@ -112,6 +110,9 @@ class Submissions(object):
           submission_folder_name:   (str) This is the directory for all
             submissions that we will download. This must exist and will throw
             an IOError if it does not exist.
+
+          assignment_code:   (str) This is the two letter name for the
+            assignment.
 
           deadline:   (str) This is the deadline of the assignment if it is
             late. The input must be in strict ISO 8601 format
@@ -146,9 +147,12 @@ class Submissions(object):
             os.makedirs(self.MAIN_REPO_DIR)
 
         if not os.path.isdir(submission_folder_name):
+
             raise IOError(
-              "%s: Submission folder name '%s' not found. Exiting." % (
-                inspect.currentframe().f_code.co_name, submission_folder_name))
+              ("%s: Submission folder name '%s' not found. "
+               "Please download this from T-Square before continuing. "
+               "Exiting.") %
+              (inspect.currentframe().f_code.co_name, submission_folder_name))
 
 
         # Guarantee that we will process something if we have an empty list
@@ -228,6 +232,7 @@ class Submissions(object):
                 # Try to check out commit ID
                 self._check_commitID(
                   current_assignment=current_assignment,
+                  assignment_code=assignment_code,
                   gt_student_id=gt_student_id)
 
                 self._compare_timestamp_github(
@@ -238,6 +243,13 @@ class Submissions(object):
             self._compare_timestamp_t_square(
               current_assignment=current_assignment,
               deadline=deadline)
+
+            # Reset the repo ptr to master if needed
+            #repo_suffix = self._get_correct_reference_id(
+            #  graded_id=gt_student_id)
+            #self._execute_command(
+            #  'cd %s; git checkout master &> /dev/null' %
+            #  self._gen_prefixed_dir(prefix_str=repo_suffix))
 
             # Save Result
             student_records[t_square_id] = current_student
@@ -252,10 +264,16 @@ class Submissions(object):
         if self.is_team and student_whitelist:
             self._process_team_repos(
               assignment_alias=assignment_alias,
+              assignment_code=assignment_code,
               student_whitelist=student_whitelist)
 
 
-    def _process_team_repos(self, assignment_alias, student_whitelist):
+        print("\n\n>>>>>%s: complete for '%s'<<<<<\n\n" %
+              (inspect.currentframe().f_code.co_name, assignment_code))
+
+
+    def _process_team_repos(self, assignment_alias, assignment_code,
+                            student_whitelist):
         """
         This is the extension process_repos that focuses only on teams.
         As such this should only be called on team repos.
@@ -263,6 +281,9 @@ class Submissions(object):
         Arguments:
           assignment_alias:   (str) This is the name of the assignment, i.e.
             the submission name.
+
+          assignment_code:   (str) This is the two letter name for the
+            assignment.
 
           student_whitelist:   (list of str) This is the list of student
             username IDs that we will whitelist. That is to say all students
@@ -318,13 +339,14 @@ class Submissions(object):
                 _, most_recent_commit = commit_list[0]
 
                 command = (
-                  'cd %s; git checkout %s;' % (
-                    self._gen_prefixed_dir(team), most_recent_commit))
+                  'cd %s; git checkout %s &> /dev/null; git tag %s &> /dev/null' % (
+                    self._gen_prefixed_dir(team), most_recent_commit,
+                    assignment_code))
 
                 _ = self._execute_command(command=command)
 
             else:
-                print("%s: No valid commeit for team '%s'!" % (
+                print("%s: No valid commit for team '%s'!" % (
                   inspect.currentframe().f_code.co_name, team))
 
 
@@ -485,11 +507,12 @@ class Submissions(object):
 
             if self._should_pull_repo(repo_suffix) or just_cloned_repo:
 
-                pull_flag = 'git pull &&'
+                pull_flag = 'git pull; '
 
             command = (
-              'cd %s && git clean -fd && %s git reset --hard HEAD' % (
-                self._gen_prefixed_dir(prefix_str=repo_suffix), pull_flag))
+              ('cd %s; %s'
+               'git reset --hard; cd - &> /dev/null') % (
+                 self._gen_prefixed_dir(prefix_str=repo_suffix), pull_flag))
 
             _ = self._execute_command(command=command)
 
@@ -498,14 +521,14 @@ class Submissions(object):
         except subprocess.CalledProcessError as error:
 
             try:
-                print("%s: student '%s' subprocess.CalledProcessError: %s\n",
-                      inspect.currentframe().f_code.co_name,
-                      gt_student_id, str(error.output))
+                print("%s: student '%s' subprocess.CalledProcessError: %s\n" % (
+                  inspect.currentframe().f_code.co_name,
+                  gt_student_id, str(error.output)))
 
             except UnicodeDecodeError:
-                print("%s: student '%s' subprocess.CalledProcessError: "
-                      "UnicodeDecodeError\n",
-                      inspect.currentframe().f_code.co_name, gt_student_id)
+                print(("%s: student '%s' subprocess.CalledProcessError: "
+                       "UnicodeDecodeError\n") % (
+                         inspect.currentframe().f_code.co_name, gt_student_id))
 
 
     def _execute_command(self, command):
@@ -523,10 +546,11 @@ class Submissions(object):
         if self.OS_TYPE == 'Windows':
 
             # Windows chains commands with &, *nix with ;
+            command = command.replace('&> /dev/null', '')
             command = command.replace(';', '&')
 
             # Windows doesn't support 'go back to last directory'
-            command = command[:command.index('& cd -')]
+            command = command.replace('& cd -', '')
 
         return subprocess.check_output(command, shell=True).strip()
 
@@ -733,7 +757,8 @@ class Submissions(object):
                             (self.FOLDER_PREFIX, prefix_str))
 
 
-    def _check_commitID(self, current_assignment, gt_student_id):
+    def _check_commitID(self, current_assignment,
+                        assignment_code, gt_student_id):
         r"""
         Checks if the current commit is a valid comment in the Repo.
 
@@ -745,6 +770,9 @@ class Submissions(object):
           current_assignment:   (dict) This is the current assignment we are
           checking the commit of.
 
+          assignment_code:   (str) This is the two letter name for the
+            assignment.
+
           gt_student_id:   (str) This is a student's ID what we will grab
           the info of.
 
@@ -754,10 +782,11 @@ class Submissions(object):
         repo_suffix = self._get_correct_reference_id(graded_id=gt_student_id)
 
         command = (
-          'cd %s; git checkout %s; '
-          'git show --pretty=format:\'%%H\' --no-patch; cd - &> /dev/null' % (
+          'cd %s; git checkout %s; git tag -f %s &> /dev/null;'
+          'git show --pretty=format:\'%%H\' --no-patch; '
+          'cd - &> /dev/null' % (
             self._gen_prefixed_dir(prefix_str=repo_suffix),
-            current_assignment['commitID']))
+            current_assignment['commitID'], assignment_code))
 
         output_checkout = self._execute_command(command=command)
 
@@ -1040,13 +1069,9 @@ def _init_log(log_filename=None, log_file_mode='w', fmt_str=None):
     Initializes the logging for this module.
 
     This should not be in a class as this is unique per file (module) nor
-    should be this imported.
-
-    This could be integrated by moving all logging commands but then all
-    log names need to be unique to prevent clobbering. The default action is
-    to append but set to overwrite since it is unlikely we need the previous
-    run info. Assume we have unique names, we will generate a lot of log
-    files which is also undesirable.
+    should be this imported. Moreover, the class needs to have logger imports
+    on the new file, if moved. This can be called multiple times and will
+    clear all current logs and make new ones.
 
     Arguments:
       log_filename:   (str) This is the log filename we are outputting to.
@@ -1087,6 +1112,7 @@ def _init_log(log_filename=None, log_file_mode='w', fmt_str=None):
     fmt_str = logging.Formatter(fmt_str)
     logger.setLevel(logging.DEBUG)
 
+    logger.handlers = [] # Clear all old handlers
 
     stdout = logging.StreamHandler()
     stdout.setFormatter(fmt_str)

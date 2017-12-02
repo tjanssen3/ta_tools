@@ -31,12 +31,14 @@ __version__ = "1.0.0"
 
 
 import argparse
+import inspect
+from itertools import product
 
 from process_submissions import Submissions
 
 
 def process_assignment(
-  assignment_name, deadline, report_filename, student_whitelist=None,
+  assignment_name, assignment_code, deadline, report_filename, student_whitelist=None,
   should_pull_repo_flag=True, is_team=False):
     r"""
     Calls the backend to do the processing.
@@ -44,6 +46,8 @@ def process_assignment(
     Arguments:
       assignment_name:   (str) This is the name of the assignment,
         which will be used to create the directory.
+
+      assignment_code:   (str) This is the two letter name for the assignment.
 
       deadline:   (str) This is the deadline for the assignment, to
         check if this late. The format is: 'YYYY-MM-DDTHH:MM:SS'
@@ -66,6 +70,7 @@ def process_assignment(
     submissions.process_repos(
       submission_folder_name=('./submissions/%s' % assignment_name),
       deadline=deadline,
+      assignment_code=assignment_code,
       student_whitelist=student_whitelist)
 
     submissions.generate_report(
@@ -78,7 +83,8 @@ def process_assignment(
     submissions.create_student_json('students_full.txt')
 
 
-def get_assignment_info(assignment_name, should_pull_repo_flag=None):
+def get_assignment_info(assignment_name, should_pull_repo_flag=None,
+                        is_batch_run=False):
     r"""
     Converts the parser input into a complete Python dictionary to call the
     backend.
@@ -91,11 +97,15 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None):
       Here are the possible options:
 
       None:  Default auto settings which is download repos for all individual
-        assignments and the first part of a team assignment.
+            assignments and the first part of a team assignment.
 
-      True (or anything Truthy): Always download repos from Github.
+        True (or anything Truthy): Always download repos from Github.
 
-      False (or anything Falsy but not None): Never download repos from Github.
+        False (or anything Falsy but not None): Never download repos from
+        Github.
+
+      is_batch_run:   (boolean) States if this is a batch run. Prints are
+        suppressed if they are.
 
     Returns:
       A dictionary with keys that can be used for the backside.
@@ -150,7 +160,9 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None):
 
         except IOError:
 
-            print("WARNING: We will process repos from all students")
+            if not is_batch_run:
+                print("WARNING: We will process repos from all students")
+
             return None
 
 
@@ -184,23 +196,35 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None):
         'deadline' : '2017-11-04T12:05:00',
         'assignment_name' : 'Assignment 7 White-Box Testing',
         },
-      'D0': {
+      'I1': {
+        'deadline' : '2017-11-11T12:05:00',
+        'assignment_name' : 'Individual Project, Deliverable 1',
+        },
+      'I2': {
+        'deadline' : '2017-11-18T12:05:00',
+        'assignment_name' : 'Individual Project, Deliverable 2',
+        },
+      'I3': {
+        'deadline' : '2017-12-02T12:05:00',
+        'assignment_name' : 'Individual Project, Deliverable 3',
+        },
+      'T0': {
         'deadline' : '2017-09-23T12:05:00',
         'assignment_name' : 'Group Project, Deliverable 0',
         },
-      'D1': {
+      'T1': {
         'deadline' : '2017-09-30T12:05:00',
         'assignment_name' : 'Group Project, Deliverable 1',
         },
-      'D2': {
+      'T2': {
         'deadline' : '2017-10-07T12:05:00',
         'assignment_name' : 'Group Project, Deliverable 2',
         },
-      'D3': {
+      'T3': {
         'deadline' : '2017-10-14T12:05:00',
         'assignment_name' : 'Group Project, Deliverable 3',
         },
-      'D4': {
+      'T4': {
         'deadline' : '2017-10-21T12:05:00',
         'assignment_name' : 'Group Project, Deliverable 4',
         },
@@ -213,33 +237,42 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None):
     # the penultimate value (not the last value!)
 
     # The list of repos we will not preform a git pull
-    no_git_pull_list = ['D%d' % i for i in range(1, 5)]
+    no_git_pull_list = (['I%d' % i for i in range(2, 5)] +
+                        ['T%d' % i for i in range(1, 5)])
 
     if assignment_name not in possible_argument_list:
-        print("ERROR: Assignment %s is not a valid assignment" %
-              assignment_name)
+        if not is_batch_run:
+            print("ERROR: Assignment %s is not a valid assignment" %
+                  assignment_name)
         return {}
 
     assignment_info = assignment_dict.get(assignment_name, None)
 
     if assignment_info is None:
-        print("ERROR: No assignment info for %s set!")
+        if not is_batch_run:
+            print("ERROR: No assignment info for %s set!")
         return {}
 
 
-    # Remove white space in names so it is easier to cd on CLI
-    new_assignment_name = assignment_info['assignment_name'].replace(' ', '_')
-    assignment_info['assignment_name'] = new_assignment_name
+    # This corresponds to the T-Square output so don't change it
+    # assignment_info['assignment_name']
 
 
     # This is the Python Ternary operator
-    is_team = False if assignment_name.startswith('A') else True
+    is_team = True if assignment_name.startswith('T') else False
+    is_multi_assignment = True if not assignment_name.startswith('A') else False
 
     prefix = 'team' if is_team else 'student'
     report_filename = 'report_%s_%s.txt' % (assignment_name, prefix)
 
-    student_filename = ('team.txt' if is_team else
-                        'students_%s.txt' % assignment_name)
+    student_filename = None
+    if is_team:
+        student_filename = 'team.txt'
+    elif is_multi_assignment:
+        student_filename = 'individual.txt'
+    else:
+        student_filename = 'students_%s.txt' % assignment_name
+
     student_whitelist = get_students_list_from_file(filename=student_filename)
 
     assignment_info['is_team'] = is_team
@@ -252,6 +285,7 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None):
     else:
         assignment_info['should_pull_repo_flag'] = bool(should_pull_repo_flag)
 
+    assignment_info['assignment_code'] = assignment_name
 
     return assignment_info
 
@@ -270,6 +304,14 @@ def parse_main(submission_target=None):
     """
 
 
+    # Cache Results
+    func_name = inspect.currentframe().f_code.co_name
+
+    # States if we will always pull from the Repo
+    # None is auto, True is always, False is never
+    force_pull_flag = None
+
+
     # Remember in Python, range starts from the first value but ends in
     # the penultimate value (not the last value!)
 
@@ -277,8 +319,15 @@ def parse_main(submission_target=None):
     # These will include more options than actual assignments so it is
     # easier or remove assignments as needed but change the ranges as needed.
     possible_argument_list = (['A%d' % i for i in range(1, 10)] +
-                              ['D%d' % i for i in range(0, 6)])
+                              ['I%d' % i for i in range(1, 5)] +
+                              ['T%d' % i for i in range(0, 6)] +
+                              ['I', 'T'])
 
+    # Make sure this matches with the above list so users know which values
+    # are correct
+
+    # This is created to shorten the list above
+    printable_arg_list = "{A1..A9,I,I1..I4,T,T0..T5}"
 
     # Parse user input if not overridden
     if submission_target is None:
@@ -289,22 +338,98 @@ def parse_main(submission_target=None):
                   "this arg parser and allow remote execution"))
 
         parser.add_argument(
-          'assignment_name', choices=possible_argument_list,
-          help="Select the assignment to download, formatted at A# or D#")
+          'assignment_name', choices=possible_argument_list, nargs='+',
+          help=(
+            "select the assignment to download, formatted at A# or I# or T#\n"
+            "Entering only I or T will grab all commits together for "
+            "said projects"),
+          metavar=printable_arg_list,
+          )
+
+        parser.add_argument(
+          '-f', '--force', action='store_const',
+          const=True,
+          default=None,
+          dest='force_pull_flag',
+          help="overrides the default settings and always pull the repo",
+          )
+
+        parser.add_argument(
+          '-v', '--version', action='version',
+          version="%%(prog)s Version: %s" % __version__,
+          )
 
         args = parser.parse_args()
         assignment_name = args.assignment_name
 
+        if len(assignment_name) == 1:
+            assignment_name = assignment_name[0]
+
+        # Sanitize this input
+        force_pull_flag = args.force_pull_flag
+
+        if force_pull_flag not in [True, None, False]:
+            force_pull_flag = bool(force_pull_flag)
+
     else:
-        assignment_name = submission_target
 
-    assignment_info = get_assignment_info(assignment_name=assignment_name)
+        assignment_name = submission_target # Removed unicode input
 
-    if not assignment_info:
-        return -1
+        if not isinstance(assignment_name, (list, str)):
+            print("%s: assignment_name is not a string: '%s'" %
+                  (func_name, str(submission_target)))
 
-    # ** Converts a dictionary to match all keywords in a function declaration.
-    process_assignment(**assignment_info)
+
+    if len(assignment_name) == 2 and isinstance(assignment_name, str):
+
+        print("%s: Analyzing assignment '%s'" % (func_name, assignment_name))
+
+        assignment_info = get_assignment_info(
+          assignment_name=assignment_name,
+          should_pull_repo_flag=force_pull_flag)
+
+        if not assignment_info:
+            return -1
+
+        # ** Converts a dictionary to match all keywords in a function
+        # declaration.
+        process_assignment(**assignment_info)
+
+    elif isinstance(assignment_name, list) or assignment_name[0] in ['I', 'T']:
+
+        if assignment_name[0] in ['I', 'T']:
+            letter = assignment_name[0]
+            input_list = ["%s%d" % (letter, i) for i in range(5)]
+        else:
+            input_list = assignment_name
+
+        print("%s: Batch processing..." % func_name)
+
+        for assignment_code in input_list:
+
+            print("%s: Analyzing assignment '%s'" % (
+              func_name, assignment_code))
+
+            assignment_info = get_assignment_info(
+              assignment_name=assignment_code,
+              should_pull_repo_flag=force_pull_flag,
+              is_batch_run=True)
+
+            if assignment_info:
+
+                print("\n\n%s: Starting run for '%s'" % (
+                  func_name, assignment_code))
+                process_assignment(**assignment_info)
+
+            else:
+
+                print("\n\n%s: Invalid assignment '%s'" % (
+                  func_name, assignment_code))
+
+    else:
+
+        print("%s:Invalid Assignment code entered '%s'" %
+              (inspect.currentframe().f_code.co_name, assignment_name))
 
 
 if __name__ == "__main__":
