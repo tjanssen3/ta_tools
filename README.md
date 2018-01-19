@@ -8,16 +8,16 @@ For the purposes of this project, the assignment code is a two letter code AX or
 ## Dependencies
 1. Python 2.7 or 3.X
 2. Command line access (Windows/Bash/Zsh)
-3. Student data: students\_full.txt, student\_records.json, student\_aliases.json
+3. Student data: students_full.txt, student_records.json, student_aliases.json
 
 ## Recommend
 * Pycharm IDE or any other Python IDE
 
 ### Individual Project Additional Dependencies
-* The students you are grading in students\_XX\_.txt where XX is the assignment number.
+* The students you are grading in students_XX_.txt where XX is the assignment number.
 
 ### Group Project Additional Dependencies
-* The teams you are grading in team.txt, student\_records\_team\_members.json, student\_record\_teams.json
+* The teams you are grading in team.txt, student_records_team_members.json, student_record_teams.json
 
 # Initial Setup
 1. Clone this repo to your machine
@@ -33,7 +33,7 @@ For the purposes of this project, the assignment code is a two letter code AX or
 1. Download the 'student submission text' submissions from T-Square in bulk.
 2. Extract the file to the 'submissions' folder (technically it can go anywhere, but I like to keep these in one place)
 3. Set up your assignment for grading by adding/modifying a current entry (see Usage section for specifics)
-4. Open the command line and call download\_submission.py with the assignment code.
+4. Open the command line and call download_submission.py with the assignment code.
 5. Authenticate with GitHub and let the scripts run
 6. View output in console or the report file (both have the same output)
 7. Start grading!
@@ -44,10 +44,10 @@ When you set up a new assignment for grading, you'll need these 2 things:
 2. Assignment name (this is the same as the folder you extracted into 'submissions')
 3. (Optional) Your list of students to grade. If you don't specify a list, it'll download repos for the whole class.
 
-The fastest way to get the students list is to copy all your students from the Gradebook and paste them into a text file called students\_XX.txt.
+The fastest way to get the students list is to copy all your students from the Gradebook and paste them into a text file called students_XX.txt.
 The students should be their T-Square ID names with newlines between them and nothing else.
 
-Create/modify the python dictionary in download\_submission.py
+Create/modify the python dictionary in download_submission.py
 ```
         'A2': {
           'deadline' : '2017-09-02T12:05:00',
@@ -58,11 +58,16 @@ Be mindful of the commas and curly braces so when inserting this code, this rema
 
 Run it from the command line like this:
 ```
-    ./download\_submission.py XX where XX is the assignment code.
+    ./download_submission.py XX where XX is the assignment code.
+```
+
+Assignment codes are: A1 to A7 for assignments, I1 to I4 for the Individual Project. Example:
+ ```
+    ./download_submission.py A3
 ```
 
 # Group Projects
-ta\_tools supports group projects, which takes in a list of teams as input, rather than student GT usernames, and will process submissions based on a single repo for each group. No additional configuration is necessary.
+ta_tools supports group projects, which takes in a list of teams as input, rather than student GT usernames, and will process submissions based on a single repo for each group. No additional configuration is necessary.
 
 Full example, with convenience function:
 
@@ -73,7 +78,7 @@ Full example, with convenience function:
           },
 ```
 
-Here's an example of what your report\_group\_XX\_students.txt file contents might look like (shortened for convenience):
+Here's an example of what your team.txt file contents might look like (shortened for convenience):
 ```
 Team05
 Team19
@@ -82,7 +87,7 @@ Team19
 Reports will be separated by team for convenience, and still print late, missing and invalid commit information as well.
 
 # Options
- process\_submissions.Submissions.process\_repos also supports opting out of pulling from GitHub, which speeds up processing older assignments. This can be done in two days.
+ process_submissions.Submissions.process_repos also supports opting out of pulling from GitHub, which speeds up processing older assignments. This can be done in two ways.
 
 The first option is set the default setting in the function declaration:
 ```
