@@ -1,13 +1,20 @@
-Repos/*
-submissions/*
 archive/*
+
+*_repo
+*_repos
+repos*
+
+submission/*
+submissions/*
+
+.idea/*
+local/*
 local_only/*
 
-student*.txt
-student*.json
-report*.txt
+__pycache__
 
+student*
 *.pyc
-.idea/*
-*.zip
 *.tar.gz
+*.txt
+*.zip
