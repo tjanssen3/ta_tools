@@ -1,9 +1,9 @@
-# Ta\\_tools
-TA tools to automate the downloading of Student Repos, originally created for CS 6300.
+# ta_tools
+Use TA tools to automate the downloading of Student Repos, originally created for CS 6300.
 This will download GitHub repos for students in bulk, parse through submission text for commit IDs, try to check them out, then get information about timestamps from T-Square and GitHub and compare them against a deadline.
 
 ## Info
-For the purposes of this project, the assignment code is a two letter code AX or DX where A is an individual assignment and D is a team assignment. The second character is the number of the assignment.
+For the purposes of this project, the assignment code is a two letter code AX or TX where A is an individual assignment and T is a team assignment. The second character is the number of the assignment.
 
 ## Dependencies
 1. Python 2.7 or 3.X
