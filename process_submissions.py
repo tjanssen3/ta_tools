@@ -65,8 +65,8 @@ class Submissions(object):
         self.T_SQUARE_DATETIME_PATTERN = '%Y%m%d%H%M%S'
 
         # Constants for the class
-        self.FOLDER_PREFIX = '6300Fall17'
-        self.GIT_CONTEXT = 'gt-omscs-se-2017fall'
+        self.FOLDER_PREFIX = '6300Spring18'
+        self.GIT_CONTEXT = 'gt-omscs-se-2018spring'
 
         self.STUDENT_RECORDS_FILENAME = 'student_records.json'
         self.STUDENT_ALIAS_FILENAME = 'student_aliases.json'
@@ -75,6 +75,8 @@ class Submissions(object):
         self.TIMESTAMP_FILENAME = 'timestamp.txt'
 
         self.MAIN_REPO_DIR = 'student_repo'
+        self.PLATFORM = "CANVAS"
+        self.PLATFORMS_VALID = ["CANVAS", "TSQUARE"]
 
         # Stored to be used in later logic, so typos between copies don't exist
         self.STR_INVALID = "Invalid"
@@ -176,6 +178,7 @@ class Submissions(object):
           epilog="Run create_student_json first.")
 
 
+        # TSQUARE VERSION
         directory_listing = self._get_student_folders(
           submission_folder_name=submission_folder_name,
           student_whitelist=student_whitelist)
@@ -183,9 +186,9 @@ class Submissions(object):
 
         for folder in directory_listing:
 
-            t_square_id = folder.split('(')[1].strip(')')
+            platform_id = folder.split('(')[1].strip(')')
 
-            current_student = student_records.get(t_square_id, {})
+            current_student = student_records.get(platform_id, {})
 
             if not current_student:
                 continue
@@ -201,11 +204,10 @@ class Submissions(object):
                 continue
 
             # Checking repeated results on calls to simplify them
-            base_directory = os.path.join(submission_folder_name, folder)
+            base_directory = self._get_submission_folder(submission_folder_name, folder)
             current_assignment = current_student[assignment_alias] = {}
-            current_submission_file = (
-              '%s(%s)_submissionText.html' % (
-                current_student['name'], t_square_id))
+
+            current_submission_file = self._get_submission_file_name(current_student, platform_id)
 
             # TODO: These methods below should be combined together?
 
@@ -252,7 +254,7 @@ class Submissions(object):
             #  self._gen_prefixed_dir(prefix_str=repo_suffix))
 
             # Save Result
-            student_records[t_square_id] = current_student
+            student_records[platform_id] = current_student
 
 
         if student_records is not None:
@@ -314,9 +316,9 @@ class Submissions(object):
 
             for student in member_list:
 
-                t_square_id = student_aliases[student]
+                platform_id = student_aliases[student]
                 team_assignment = (
-                  student_records[t_square_id][assignment_alias])
+                  student_records[platform_id][assignment_alias])
 
                 try:
                     commit_time = team_assignment['Timestamp GitHub']
@@ -555,7 +557,7 @@ class Submissions(object):
         return subprocess.check_output(command, shell=True).strip()
 
 
-    def create_student_json(self, input_filename):
+    def create_student_json(self, input_filename, should_create_json_files=False):
         r"""
         Converts the input file to two useful JSON files specifically
         for student grading.
@@ -563,36 +565,46 @@ class Submissions(object):
         Arguments:
           input_filename:   (str) The input filename we will parse into JSON
             files.
+          should_create_json_files: (bool) whether or not we should create these files. Defaults to false.
 
         """
 
+        if should_create_json_files:
+            try:
 
-        try:
+                with open(input_filename, 'r') as input_file:
 
-            with open(input_filename, 'r') as input_file:
+                    gt_id_dict, student_records = {}, {}
 
-                gt_id_dict, student_records = {}, {}
+                    for line in input_file:
 
-                for line in input_file:
+                        parsed_line = line.strip().split('\t')
 
-                    parsed_line = line.strip().split('\t')
+                        try:
+                            if self.PLATFORM == "TSQUARE":
+                                name, gt_id, platform_id = parsed_line[0:3]
+                            elif self.PLATFORM == "CANVAS":
+                                name, platform_id, gt_id = parsed_line[0:3]
+                            else:
+                                raise TypeError("create_student_json error! Currently selected platform %s isn't supported yet! Valid platforms are %s" % (self.PLATFORM, self.PLATFORMS_VALID))
+                        except ValueError:
+                            print("Malformed input not added: %s" % str(parsed_line))
+                            continue # just skip malformed input
 
-                    name, gt_id, t_square_id = parsed_line[0:3]
+                        student_records[platform_id] = {
+                          'name': name, 'gt_id': gt_id}
+                        gt_id_dict[gt_id] = platform_id
 
-                    student_records[t_square_id] = {
-                      'name': name, 'gt_id': gt_id}
-                    gt_id_dict[gt_id] = t_square_id
-
-        except IOError:
-            raise IOError(
-              "%s: Missing file '%s'. Exiting." % (
-                inspect.currentframe().f_code.co_name, input_filename))
+            except IOError:
+                raise IOError(
+                  "%s: Missing file '%s'. Exiting." % (
+                    inspect.currentframe().f_code.co_name, input_filename))
 
 
-        with open(self.STUDENT_RECORDS_FILENAME, 'w') as output_file:
-            json.dump(student_records, output_file)
-        with open(self.STUDENT_ALIAS_FILENAME, 'w') as alias_file:
-            json.dump(gt_id_dict, alias_file)
+            with open(self.STUDENT_RECORDS_FILENAME, 'w') as output_file:
+                json.dump(student_records, output_file)
+            with open(self.STUDENT_ALIAS_FILENAME, 'w') as alias_file:
+                json.dump(gt_id_dict, alias_file)
 
 
     def _get_correct_reference_id(self, graded_id):
@@ -726,15 +738,15 @@ class Submissions(object):
         for student in student_whitelist:
 
             try:
-                t_square_id = student_aliases[student]
-                name = student_records[t_square_id]['name']
+                platform_id = student_aliases[student]
+                name = student_records[platform_id]['name']
 
             except IndexError:
                 logger.error(
                   "Couldn't get folder name for student with GTID %s\n",
                   student)
 
-            folders.append('%s(%s)' % (name, t_square_id))
+            folders.append('%s(%s)' % (name, platform_id))
 
         return folders
 
@@ -799,6 +811,42 @@ class Submissions(object):
         valid_commit = commit == current_assignment['commitID']
         current_assignment['commitID valid'] = valid_commit
 
+    def _get_submission_folder(self, submission_folder_name, folder):
+        r"""
+        Gets the folder student submissions where student submission info can be found
+        :param submission_folder_name: root folder for all submissions for this assignment
+        :param folder: student folder
+        :return:
+        """
+
+        if self.PLATFORM == "TSQUARE":
+            folder_name = os.path.join(submission_folder_name, folder)
+        elif self.PLATFORM == "CANVAS":
+            folder_name = submission_folder_name
+        else:
+            raise ValueError("_get_submission_folder does not handle platform %!" % self.PLATFORM)
+
+        return folder_name
+
+    def _get_submission_file_name(self, current_student, platform_id):
+        r"""
+        Get the name of the file to pull submission text from.
+        :param current_student: GT ID of student
+        :param platform_id: student identifier (differs per platform)
+        :return:
+        """
+
+        if self.PLATFORM == "TSQUARE":
+            current_submission_file = (
+                    '%s(%s)_submissionText.html' % (
+                current_student['name'], platform_id))
+        elif self.PLATFORM == "CANVAS":
+            name = current_student['name'].replace(",", "").replace(" ", "").lower()
+            current_submission_file = "%s_%s_text.html" % (name, platform_id)
+        else:
+            raise ValueError("_get_submission_file_name does not handle platform %!" % self.PLATFORM)
+
+        return current_submission_file
 
     def _check_submission_file(self, current_assignment,
                                base_directory, submission_file):
@@ -866,7 +914,7 @@ class Submissions(object):
         except IOError:
 
             current_assignment['Timestamp T-Square'] = self.STR_MISSING
-            current_assignment['commitID'] = self.STR_MISSING
+            #current_assignment['commitID'] = self.STR_MISSING  # don't nuke commit ID if timestamp is missing (fixes issue with Canvas)
 
 
     def _compare_timestamp_github(self, current_assignment,

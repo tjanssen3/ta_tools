@@ -39,7 +39,7 @@ from process_submissions import Submissions
 
 def process_assignment(
   assignment_name, assignment_code, deadline, report_filename, student_whitelist=None,
-  should_pull_repo_flag=True, is_team=False):
+  should_pull_repo_flag=True, is_team=False, should_create_json_files=False):
     r"""
     Calls the backend to do the processing.
 
@@ -67,6 +67,9 @@ def process_assignment(
     submissions = Submissions(is_team=is_team,
                               should_pull_repo_flag=should_pull_repo_flag)
 
+    # Optionally create JSON files, otherwise skip. Access this with -j input argument.
+    submissions.create_student_json('students_full.txt', should_create_json_files)
+
     submissions.process_repos(
       submission_folder_name=('./submissions/%s' % assignment_name),
       deadline=deadline,
@@ -77,10 +80,6 @@ def process_assignment(
       assignment=assignment_name,
       student_list=student_whitelist,
       report_filename=report_filename)
-
-
-    # TODO: Do we always need to do this?
-    submissions.create_student_json('students_full.txt')
 
 
 def get_assignment_info(assignment_name, should_pull_repo_flag=None,
@@ -169,64 +168,64 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None,
     # Deadline info is EST + 4 hours = UTC, which is the T-Square deadline
     assignment_dict = {
       'A1': {
-        'deadline' : '2017-08-28T12:05:00',
-        'assignment_name' : 'Assignment 1 Team Matching Survey',
+        'deadline' : '2018-01-13T12:05:00',
+        'assignment_name' : 'A1',
         },
       'A2': {
-        'deadline' : '2017-09-02T12:05:00',
-        'assignment_name' : 'Assignment 2 Git usage'
+        'deadline' : '2018-01-20T12:05:00',
+        'assignment_name' : 'A2',
         },
       'A3': {
-        'deadline' : '2017-09-09T12:05:00',
-        'assignment_name' : 'Assignment 3 Basic Java coding and JUnit',
+        'deadline' : '2018-01-27T12:05:00',
+        'assignment_name' : 'A3',
         },
       'A4': {
-        'deadline' : '2017-09-16T12:05:00',
-        'assignment_name' : 'Assignment 4 Simple Android App',
+        'deadline' : '2018-02-03T12:05:00',
+        'assignment_name' : 'A4',
         },
       'A5': {
-        'deadline' : '2017-09-23T12:05:00',
-        'assignment_name' : 'Assignment 5 Software Design',
+        'deadline' : '2018-02-10T12:05:00',
+        'assignment_name' : 'A5',
         },
       'A6': {
-        'deadline' : '2017-10-28T12:05:00',
-        'assignment_name' : 'Assignment 6 Category partition',
+        'deadline' : '2018-03-17T12:05:00',
+        'assignment_name' : 'A6',
         },
       'A7': {
-        'deadline' : '2017-11-04T12:05:00',
-        'assignment_name' : 'Assignment 7 White-Box Testing',
+        'deadline' : '2018-03-31T12:05:00',
+        'assignment_name' : 'A7',
         },
       'I1': {
-        'deadline' : '2017-11-11T12:05:00',
-        'assignment_name' : 'Individual Project, Deliverable 1',
+        'deadline' : '2018-04-07T12:05:00',
+        'assignment_name' : 'I_D1',
         },
       'I2': {
-        'deadline' : '2017-11-18T12:05:00',
-        'assignment_name' : 'Individual Project, Deliverable 2',
+        'deadline' : '2018-04-14T12:05:00',
+        'assignment_name' : 'I_D2',
         },
       'I3': {
-        'deadline' : '2017-12-02T12:05:00',
-        'assignment_name' : 'Individual Project, Deliverable 3',
+        'deadline' : '2018-04-21T12:05:00',
+        'assignment_name' : 'I_D3',
         },
       'T0': {
-        'deadline' : '2017-09-23T12:05:00',
-        'assignment_name' : 'Group Project, Deliverable 0',
+        'deadline' : '2018-02-10T12:05:00',
+        'assignment_name' : 'G_D0',
         },
       'T1': {
-        'deadline' : '2017-09-30T12:05:00',
-        'assignment_name' : 'Group Project, Deliverable 1',
+        'deadline' : '2018-02-17T12:05:00',
+        'assignment_name' : 'G_D1',
         },
       'T2': {
-        'deadline' : '2017-10-07T12:05:00',
-        'assignment_name' : 'Group Project, Deliverable 2',
+        'deadline' : '2018-02-24T12:05:00',
+        'assignment_name' : 'G_D2',
         },
       'T3': {
-        'deadline' : '2017-10-14T12:05:00',
-        'assignment_name' : 'Group Project, Deliverable 3',
+        'deadline' : '2018-03-03T12:05:00',
+        'assignment_name' : 'G_D3',
         },
       'T4': {
-        'deadline' : '2017-10-21T12:05:00',
-        'assignment_name' : 'Group Project, Deliverable 4',
+        'deadline' : '2018-03-10T12:05:00',
+        'assignment_name' : 'G_D4',
         },
       }
 
@@ -310,6 +309,7 @@ def parse_main(submission_target=None):
     # States if we will always pull from the Repo
     # None is auto, True is always, False is never
     force_pull_flag = None
+    create_json_files = None
 
 
     # Remember in Python, range starts from the first value but ends in
@@ -359,17 +359,30 @@ def parse_main(submission_target=None):
           version="%%(prog)s Version: %s" % __version__,
           )
 
+        parser.add_argument(
+            '-j', '--json_create', action='store_const',
+            const=True,
+            default=None,
+            dest='create_json_files',
+            help='create the json files required for storing student semester data. Requires students_full.txt'
+        )
+
         args = parser.parse_args()
         assignment_name = args.assignment_name
 
         if len(assignment_name) == 1:
             assignment_name = assignment_name[0]
 
-        # Sanitize this input
+        # Sanitize inputs
         force_pull_flag = args.force_pull_flag
 
         if force_pull_flag not in [True, None, False]:
             force_pull_flag = bool(force_pull_flag)
+
+        create_json_files = args.create_json_files
+
+        if create_json_files not in [True, None, False]:
+            create_json_files = bool(create_json_files)
 
     else:
 
@@ -386,10 +399,13 @@ def parse_main(submission_target=None):
 
         assignment_info = get_assignment_info(
           assignment_name=assignment_name,
-          should_pull_repo_flag=force_pull_flag)
+          should_pull_repo_flag=force_pull_flag
+          )
 
         if not assignment_info:
             return -1
+
+        assignment_info['should_create_json_files'] = create_json_files
 
         # ** Converts a dictionary to match all keywords in a function
         # declaration.
