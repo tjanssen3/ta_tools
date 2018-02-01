@@ -77,6 +77,7 @@ class Submissions(object):
         self.MAIN_REPO_DIR = 'student_repo'
         self.PLATFORM = "CANVAS"
         self.PLATFORMS_VALID = ["CANVAS", "TSQUARE"]
+        self.ENCODING = "utf-8"
 
         # Stored to be used in later logic, so typos between copies don't exist
         self.STR_INVALID = "Invalid"
@@ -554,7 +555,10 @@ class Submissions(object):
             # Windows doesn't support 'go back to last directory'
             command = command.replace('& cd -', '')
 
-        return subprocess.check_output(command, shell=True).strip()
+        raw_info = subprocess.check_output(command, shell=True).strip()
+        info = raw_info.decode(self.ENCODING)
+
+        return info
 
 
     def create_student_json(self, input_filename, should_create_json_files=False):
@@ -806,7 +810,7 @@ class Submissions(object):
             # Windows returns \\ prefix and suffix so strip it
             commit = output_checkout[1:-1]
         else:
-            commit = output_checkout
+            commit = str(output_checkout).split('/')[0]  # may have suffix /<path>
 
         valid_commit = commit == current_assignment['commitID']
         current_assignment['commitID valid'] = valid_commit
@@ -1064,6 +1068,7 @@ class Submissions(object):
         A correct datetime object with the date
         """
 
+        time_str = time_str.split("/")[0]  # may have suffix /<path>
 
         time_obj = datetime.strptime(time_str[:19], self.DATETIME_PATTERN)
         positive_sign = hour = minute = 0
