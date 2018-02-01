@@ -74,7 +74,8 @@ def process_assignment(
       submission_folder_name=('./submissions/%s' % assignment_name),
       deadline=deadline,
       assignment_code=assignment_code,
-      student_whitelist=student_whitelist)
+      student_whitelist=student_whitelist,
+      should_pull=should_pull_repo_flag)
 
     submissions.generate_report(
       assignment=assignment_name,
@@ -347,9 +348,10 @@ def parse_main(submission_target=None):
           )
 
         parser.add_argument(
-          '-f', '--force', action='store_const',
-          const=True,
+          '-f', '--force', #action='store_true',
+            choices=['True', 'False'],
           default=None,
+         # type=bool,
           dest='force_pull_flag',
           help="overrides the default settings and always pull the repo",
           )
@@ -376,8 +378,13 @@ def parse_main(submission_target=None):
         # Sanitize inputs
         force_pull_flag = args.force_pull_flag
 
-        if force_pull_flag not in [True, None, False]:
-            force_pull_flag = bool(force_pull_flag)
+        # is_team = True if assignment_name.startswith('T') else False
+        if force_pull_flag == "False":
+            force_pull_flag = False
+        elif force_pull_flag == 'True':
+            force_pull_flag = True
+        else:
+            force_pull_flag = None
 
         create_json_files = args.create_json_files
 

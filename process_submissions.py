@@ -99,7 +99,7 @@ class Submissions(object):
 
 
     def process_repos(self, submission_folder_name,
-                      assignment_code, deadline, student_whitelist=None):
+                      assignment_code, deadline, student_whitelist=None, should_pull=True):
         """
         This is the core function that will automate the download of
         student submissions.
@@ -225,7 +225,7 @@ class Submissions(object):
             # Clone repo if needed
             # NOTE: You'll need to authenticate with Github here and
             # debuggers may not work properly
-            self._setup_student_repo(gt_student_id=gt_student_id)
+            self._setup_student_repo(gt_student_id=gt_student_id, should_pull=should_pull)
 
             # Only check commit ID validity with GitHub timestamp
             if self._is_commit_present(
@@ -471,7 +471,7 @@ class Submissions(object):
         logger.info("\n".join(str_buffer))
 
 
-    def _setup_student_repo(self, gt_student_id):
+    def _setup_student_repo(self, gt_student_id, should_pull=True):
         r"""
         Checks if the student Git repo is downloaded and cleans it up for the
         grader.
@@ -507,7 +507,7 @@ class Submissions(object):
 
             pull_flag = ''
 
-            if self._should_pull_repo(repo_suffix) or just_cloned_repo:
+            if self._should_pull_repo(repo_suffix, should_pull) or just_cloned_repo:
 
                 pull_flag = 'git pull; '
 
@@ -1081,7 +1081,7 @@ class Submissions(object):
             return time_obj - timedelta(hours=hour, minutes=minute)
 
 
-    def _should_pull_repo(self, team_number):
+    def _should_pull_repo(self, team_number, should_pull=True):
         r"""
         Checks if we should pull a repo or assume it has been pulled already.
 
@@ -1099,8 +1099,6 @@ class Submissions(object):
 
         if not self.should_pull_repo_flag:
             return False
-
-        should_pull = True
 
         if self.is_team:
 
