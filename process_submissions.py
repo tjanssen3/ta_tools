@@ -747,6 +747,10 @@ class Submissions(object):
                 platform_id = student_aliases[student]
                 name = student_records[platform_id]['name']
 
+            except KeyError:
+                error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
+                raise ValueError(error_message)
+
             except IndexError:
                 logger.error(
                   "Couldn't get folder name for student with GTID %s\n",
