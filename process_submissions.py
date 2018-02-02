@@ -512,7 +512,7 @@ class Submissions(object):
 
             if self._should_pull_repo(repo_suffix, should_pull) or just_cloned_repo:
 
-                pull_flag = 'git pull; '
+                pull_flag = 'git pull origin master; '
 
             command = (
               ('cd %s; %s'
@@ -847,7 +847,7 @@ class Submissions(object):
                     '%s(%s)_submissionText.html' % (
                 current_student['name'], platform_id))
         elif self.PLATFORM == "CANVAS":
-            name = current_student['name'].replace(",", "").replace(" ", "").lower()
+            name = current_student['name'].replace(",", "").replace(" ", "").replace("-", "").lower()
 
             label = ""
             if late:
