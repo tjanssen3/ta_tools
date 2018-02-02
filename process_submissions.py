@@ -216,7 +216,9 @@ class Submissions(object):
             self._check_submission_file(
               current_assignment=current_assignment,
               base_directory=base_directory,
-              submission_file=current_submission_file)
+              submission_file=current_submission_file,
+              current_student=current_student,
+              platform_id=platform_id)
 
             # Update t-square timestamp
             self._set_timestamp_t_square(
@@ -386,7 +388,7 @@ class Submissions(object):
           epilog="Run process_repos first.")
 
 
-        bad_commit, late_github, late_t_square, missing = [], [], [], []
+        bad_commit, late_github, late_submission, missing = [], [], [], []
 
         _init_log(log_filename=report_filename)
         logger.info("Report: %s\n", assignment)
@@ -421,8 +423,8 @@ class Submissions(object):
 
         # This is a filter to get bad students in different spots
         bad_student_dict = {
-          'Submission GitHub': ('late', late_github),
-          'Submission T-Square': ('late', late_t_square),
+          'Submission GitHub': (self.STR_LATE, late_github),
+          'Submission Time': (self.STR_LATE, late_submission),
           'commitID': (self.STR_MISSING, missing),
           'commitID valid': (False, bad_commit)
         }
@@ -462,7 +464,7 @@ class Submissions(object):
 
         logger.info("\n========== RESULTS ==========")
         str_buffer = ["\nLATE SUBMISSIONS:"]
-        for fmt_str, data in [("\tT-Square (%d): %s", late_t_square),
+        for fmt_str, data in [("\tSubmission (%d): %s", late_submission),
                               ("\tGitHub (%d): %s", late_github),
                               ("\nMISSING SUBMISSIONS (%s): %s", missing),
                               ("\nBAD COMMITS (%s):\n\t%s", bad_commit)]:
@@ -832,7 +834,7 @@ class Submissions(object):
 
         return folder_name
 
-    def _get_submission_file_name(self, current_student, platform_id):
+    def _get_submission_file_name(self, current_student, platform_id, late=False):
         r"""
         Get the name of the file to pull submission text from.
         :param current_student: GT ID of student
@@ -846,14 +848,19 @@ class Submissions(object):
                 current_student['name'], platform_id))
         elif self.PLATFORM == "CANVAS":
             name = current_student['name'].replace(",", "").replace(" ", "").lower()
-            current_submission_file = "%s_%s_text.html" % (name, platform_id)
+
+            label = ""
+            if late:
+                label = "late_"
+
+            current_submission_file = "%s_%s%s_text.html" % (name, label, platform_id)
         else:
             raise ValueError("_get_submission_file_name does not handle platform %!" % self.PLATFORM)
 
         return current_submission_file
 
     def _check_submission_file(self, current_assignment,
-                               base_directory, submission_file):
+                               base_directory, submission_file, current_student, platform_id, tried_late=False):
         r"""
         This checks the submission file and see there is a valid commit.
 
@@ -872,9 +879,7 @@ class Submissions(object):
           there is one. This is left to a different method.
         """
 
-
         try:
-
             with open(os.path.join(base_directory, submission_file), 'r') as submission_info:
 
                 strings = re.findall(r'([0-9A-Za-z]{40})',
@@ -883,9 +888,17 @@ class Submissions(object):
                 commitID = strings[0] if len(strings) else self.STR_INVALID
                 current_assignment['commitID'] = commitID
 
-        except IOError:
+                if self.PLATFORM == "CANVAS" and "_late_" in submission_file:
+                    current_assignment['Timestamp Submission'] = self.STR_LATE
+                else:
+                    current_assignment['Timestamp Submission'] = self.STR_OK
 
-            current_assignment['commitID'] = self.STR_MISSING
+        except IOError:
+            if self.PLATFORM == "CANVAS" and not tried_late:
+                submission_file = self._get_submission_file_name(current_student, platform_id, late=True)
+                self._check_submission_file(current_assignment, base_directory, submission_file, current_student, platform_id, tried_late=True)
+            else:
+                current_assignment['commitID'] = self.STR_MISSING
 
 
     def _set_timestamp_t_square(self, current_assignment, base_directory):
@@ -903,22 +916,26 @@ class Submissions(object):
 
         """
 
+        if self.PLATFORM == 'TSQUARE':
+            try:
 
-        try:
+                target_filename = os.path.join(base_directory,
+                                               self.TIMESTAMP_FILENAME)
 
-            target_filename = os.path.join(base_directory,
-                                           self.TIMESTAMP_FILENAME)
+                with open(target_filename, 'r') as timestamp_info:
 
-            with open(target_filename, 'r') as timestamp_info:
+                    timestamp = self._fix_timestamp_t_square(
+                      time_str=timestamp_info.read())
+                    current_assignment['Timestamp Submission'] = timestamp
 
-                timestamp = self._fix_timestamp_t_square(
-                  time_str=timestamp_info.read())
-                current_assignment['Timestamp T-Square'] = timestamp
+            except IOError:
 
-        except IOError:
-
-            current_assignment['Timestamp T-Square'] = self.STR_MISSING
-            #current_assignment['commitID'] = self.STR_MISSING  # don't nuke commit ID if timestamp is missing (fixes issue with Canvas)
+                current_assignment['Timestamp Submission'] = self.STR_MISSING
+                #current_assignment['commitID'] = self.STR_MISSING  # don't nuke commit ID if timestamp is missing (fixes issue with Canvas)
+        elif self.PLATFORM == "CANVAS":
+            pass # this is handled in
+        else:
+            raise ValueError("_set_timestamp_t_square does not currently handle platform %! Valid platforms are %s" % (self.PLATFORM, self.PLATFORMS_VALID))
 
 
     def _compare_timestamp_github(self, current_assignment,
@@ -993,12 +1010,11 @@ class Submissions(object):
 
         """
 
+        if current_assignment['commitID'] != self.STR_MISSING and current_assignment['Timestamp Submission'] != self.STR_MISSING:
+            final_time = current_assignment['Timestamp Submission']
 
-        if current_assignment['Timestamp T-Square'] != self.STR_MISSING:
-            final_time = current_assignment['Timestamp T-Square']
-
-            msg = self.STR_OK if final_time <= deadline else self.STR_LATE
-            current_assignment['Submission T-Square'] = msg
+            msg = self.STR_OK if final_time <= deadline or final_time == self.STR_OK else self.STR_LATE
+            current_assignment['Submission Time'] = msg
 
 
     def _fix_timestamp_t_square(self, time_str):
