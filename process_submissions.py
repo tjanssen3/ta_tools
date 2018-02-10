@@ -153,9 +153,9 @@ class Submissions(object):
 
             raise IOError(
               ("%s: Submission folder name '%s' not found. "
-               "Please download this from T-Square before continuing. "
+               "Please download this from %s before continuing. "
                "Exiting.") %
-              (inspect.currentframe().f_code.co_name, submission_folder_name))
+              (inspect.currentframe().f_code.co_name, submission_folder_name, self.PLATFORM.capitalize()))
 
 
         # Guarantee that we will process something if we have an empty list
@@ -851,7 +851,7 @@ class Submissions(object):
                     '%s(%s)_submissionText.html' % (
                 current_student['name'], platform_id))
         elif self.PLATFORM == "CANVAS":
-            name = current_student['name'].replace(",", "").replace(" ", "").replace("-", "").replace(".", "").lower()
+            name = current_student['name'].replace(",", "").replace(" ", "").replace("-", "").replace(".", "").replace("'", "").lower()
 
             label = ""
             if late:
