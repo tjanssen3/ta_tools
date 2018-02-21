@@ -153,9 +153,9 @@ class Submissions(object):
 
             raise IOError(
               ("%s: Submission folder name '%s' not found. "
-               "Please download this from T-Square before continuing. "
+               "Please download this from %s before continuing. "
                "Exiting.") %
-              (inspect.currentframe().f_code.co_name, submission_folder_name))
+              (inspect.currentframe().f_code.co_name, submission_folder_name, self.PLATFORM.capitalize()))
 
 
         # Guarantee that we will process something if we have an empty list
@@ -512,7 +512,7 @@ class Submissions(object):
 
             if self._should_pull_repo(repo_suffix, should_pull) or just_cloned_repo:
 
-                pull_flag = 'git pull origin master; '
+                pull_flag = 'git pull origin master -a; '
 
             command = (
               ('cd %s; %s'
@@ -748,8 +748,11 @@ class Submissions(object):
                 name = student_records[platform_id]['name']
 
             except KeyError:
-                error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
-                raise ValueError(error_message)
+                if student == "":
+                    continue
+                else:
+                    error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
+                    raise ValueError(error_message)
 
             except IndexError:
                 logger.error(
@@ -937,7 +940,7 @@ class Submissions(object):
                 current_assignment['Timestamp Submission'] = self.STR_MISSING
                 #current_assignment['commitID'] = self.STR_MISSING  # don't nuke commit ID if timestamp is missing (fixes issue with Canvas)
         elif self.PLATFORM == "CANVAS":
-            pass # this is handled in
+            pass # this is handled in _check_submission_file for Canvas
         else:
             raise ValueError("_set_timestamp_t_square does not currently handle platform %! Valid platforms are %s" % (self.PLATFORM, self.PLATFORMS_VALID))
 
