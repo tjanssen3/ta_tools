@@ -854,7 +854,7 @@ class Submissions(object):
                     '%s(%s)_submissionText.html' % (
                 current_student['name'], platform_id))
         elif self.PLATFORM == "CANVAS":
-            name = current_student['name'].replace(",", "").replace(" ", "").replace("-", "").replace(".", "").lower()
+            name = current_student['name'].replace(",", "").replace(" ", "").replace("-", "").replace(".", "").replace("'", "").lower()
 
             label = ""
             if late:
