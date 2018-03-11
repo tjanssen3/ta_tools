@@ -319,11 +319,11 @@ class Submissions(object):
 
             for student in member_list:
 
-                platform_id = student_aliases[student]
-                team_assignment = (
-                  student_records[platform_id][assignment_alias])
-
                 try:
+                    platform_id = student_aliases[student]
+                    team_assignment = (
+                        student_records[platform_id][assignment_alias])
+
                     commit_time = team_assignment['Timestamp GitHub']
                     commitID = team_assignment['commitID']
 
@@ -438,7 +438,15 @@ class Submissions(object):
             else:
                 logger.info(student)
 
-            student_info = student_records[student_aliases[student]]
+            try:
+                student_info = student_records[student_aliases[student]]
+            except KeyError:
+                error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (
+                    student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
+                if self.is_team:
+                    continue
+                else:
+                    raise (error_message)
 
             if assignment not in student_info:
 
@@ -612,6 +620,43 @@ class Submissions(object):
             with open(self.STUDENT_ALIAS_FILENAME, 'w') as alias_file:
                 json.dump(gt_id_dict, alias_file)
 
+    def create_team_json(self, input_filename, should_create_json_files=False):
+        r"""
+        Create the JSON files required for processing team submissions.
+
+        :param input_filename: filename that will have all required information parsed out of it. Requires format "<GTID>\t<Grader>\t\<Team#>"; the <Grader> section is unused, but left in so this information can be copied directly from the gradebook.
+        :param should_create_json_files: Boolean. Passing True will create the team JSON files, passing False will skip all functionality.
+        :return:
+        """
+        if should_create_json_files:
+            try:
+                with open(input_filename, 'r') as input_file:
+                    students = {}  # what team is a student in?
+                    teams = {}  # what students are in a team?
+                    for line in input_file:
+                        line = line.strip()
+                        parsed = line.split('\t')
+
+                        GT_username = parsed[0]
+                        try:
+                            team = parsed[2]
+                        except IndexError:
+                            team = "None"
+
+                        students[GT_username] = team  # store student's team
+
+                        if team not in teams:
+                            teams[team] = []
+                        teams[team].append(GT_username)  # put student on list of team members
+
+                # save here
+                with open(self.TEAM_RECORDS_FILENAME, 'w') as student_teams_file:
+                    json.dump(students, student_teams_file)
+                with open(self.TEAM_MEMBERS_FILENAME, 'w') as team_members_file:
+                    json.dump(teams, team_members_file)
+
+            except IOError:
+                raise IOError("create_team_json couldn\'t find file with name %s" % input_filename)
 
     def _get_correct_reference_id(self, graded_id):
         r"""
@@ -721,8 +766,8 @@ class Submissions(object):
               caller_name=inspect.currentframe().f_code.co_name)
 
             # Read data in student_whitelist
-            student_whitelist_multi_list = [
-              team_records[team] for team in student_whitelist]
+            student_whitelist_multi_list = [team_records[team] for team in student_whitelist]
+
             # Flatten multi list to be a single list and store it back
             student_whitelist = list(
               itertools.chain.from_iterable(student_whitelist_multi_list))
@@ -748,11 +793,14 @@ class Submissions(object):
                 name = student_records[platform_id]['name']
 
             except KeyError:
-                if student == "":
-                    continue
+                error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (
+                    student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
+
+                if self.is_team:
+                    print(error_message)  # dropped students shouldn't be fatal in team grading
+                    continue  # don't append student to folders
                 else:
-                    error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
-                    raise ValueError(error_message)
+                    raise ValueError(error_message)  # dropped students should be fatal in normal grading
 
             except IndexError:
                 logger.error(
@@ -821,7 +869,7 @@ class Submissions(object):
         else:
             commit = str(output_checkout).split('/')[0]  # may have suffix /<path>
 
-        valid_commit = commit == current_assignment['commitID']
+        valid_commit = commit.find(current_assignment['commitID']) != -1  # -1 means no substring found, anything else means find found it
         current_assignment['commitID valid'] = valid_commit
 
     def _get_submission_folder(self, submission_folder_name, folder):

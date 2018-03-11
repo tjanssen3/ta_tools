@@ -69,6 +69,7 @@ def process_assignment(
 
     # Optionally create JSON files, otherwise skip. Access this with -j input argument.
     submissions.create_student_json('students_full.txt', should_create_json_files)
+    submissions.create_team_json('teams_full.txt', is_team and should_create_json_files)  # don't try to create team JSONs at the beginning; teams are not normally available at semester start
 
     submissions.process_repos(
       submission_folder_name=('./submissions/%s' % assignment_name),
@@ -156,7 +157,12 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None,
         try:
 
             # The input may be in unicode so we filter that and strip it
-            return list(map(str.strip, map(str, open(filename))))
+            student_whitelist = list(map(str.strip, map(str, open(filename))))
+
+            while "" in student_whitelist:
+                student_whitelist.remove("")
+
+            return student_whitelist
 
         except IOError:
 
@@ -211,23 +217,23 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None,
         },
       'T0': {
         'deadline' : '2018-02-10T12:00:00',
-        'assignment_name' : 'G_D0',
+        'assignment_name' : 'T_D0',
         },
       'T1': {
         'deadline' : '2018-02-17T12:00:00',
-        'assignment_name' : 'G_D1',
+        'assignment_name' : 'T_D1',
         },
       'T2': {
         'deadline' : '2018-02-24T12:00:00',
-        'assignment_name' : 'G_D2',
+        'assignment_name' : 'T_D2',
         },
       'T3': {
         'deadline' : '2018-03-03T12:00:00',
-        'assignment_name' : 'G_D3',
+        'assignment_name' : 'T_D3',
         },
       'T4': {
         'deadline' : '2018-03-10T12:00:00',
-        'assignment_name' : 'G_D4',
+        'assignment_name' : 'T_D4',
         },
       }
 
