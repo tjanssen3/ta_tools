@@ -172,6 +172,12 @@ class Submissions(object):
             team_records = self._get_file_dict(
               filename=self.TEAM_RECORDS_FILENAME,
               caller_name=inspect.currentframe().f_code.co_name)
+            team_members = self._get_file_dict(
+                filename = self.TEAM_MEMBERS_FILENAME,
+                caller_name=inspect.currentframe().f_code.co_name)
+            student_aliases = self._get_file_dict(
+                filename=self.STUDENT_ALIAS_FILENAME,
+                caller_name=inspect.currentframe().f_code.co_name)
 
         student_records = self._get_file_dict(
           filename=self.STUDENT_RECORDS_FILENAME,
@@ -182,33 +188,46 @@ class Submissions(object):
         # TSQUARE VERSION
         directory_listing = self._get_student_folders(
           submission_folder_name=submission_folder_name,
-          student_whitelist=student_whitelist)
+          student_whitelist=student_whitelist,
+          assignment_code=assignment_code)
 
 
         for folder in directory_listing:
+            """
+            need 4 bits of information before processing the submission: 
+            1) platform_id: unique numeric identifier per platform - this is unique per student, even if there are duplicate names
+            2) current_student: dictionary object for a student. This should contain personal information like GT_ID and name. Records will be stored from here to JSON files.
+            3) gt_username: login name for student - this is what the student will log into GitHub with
+            4) student_name: student's first and last name, usually in the form of "Last, First" and may include middle name(s)
+            """
+            if self._should_process_team_submissions(assignment_code):  # special handling required for group submissions (one file per group)
+                platform_id = self._get_group_submission_platform_id(submission_folder_name, folder, team_members, student_aliases)
+                student_name = folder
+                current_student = team_records.get(student_name, {})
+                gt_username = folder
+            else:
+                platform_id = folder.split('(')[1].strip(')')
 
-            platform_id = folder.split('(')[1].strip(')')
+                current_student = student_records.get(platform_id, {})
 
-            current_student = student_records.get(platform_id, {})
+                if not current_student:
+                    continue
 
-            if not current_student:
-                continue
+                gt_username = current_student['gt_id']
+                student_name = current_student['name']
 
-            gt_student_id = current_student['gt_id']
-
-            if ((not self.is_team and
-                 gt_student_id not in student_whitelist) or
-                  (self.is_team and
-                   team_records[gt_student_id] not in student_whitelist)
-               ):
-
-                continue
+                if ((not self.is_team and
+                     gt_username not in student_whitelist) or
+                      (self.is_team and
+                       team_records[gt_username] not in student_whitelist)
+                   ):
+                    continue
 
             # Checking repeated results on calls to simplify them
             base_directory = self._get_submission_folder(submission_folder_name, folder)
             current_assignment = current_student[assignment_alias] = {}
 
-            current_submission_file = self._get_submission_file_name(current_student, platform_id)
+            current_submission_file = self._get_submission_file_name(student_name, platform_id)
 
             # TODO: These methods below should be combined together?
 
@@ -217,7 +236,7 @@ class Submissions(object):
               current_assignment=current_assignment,
               base_directory=base_directory,
               submission_file=current_submission_file,
-              current_student=current_student,
+              student_name=student_name,
               platform_id=platform_id)
 
             # Update t-square timestamp
@@ -228,7 +247,7 @@ class Submissions(object):
             # Clone repo if needed
             # NOTE: You'll need to authenticate with Github here and
             # debuggers may not work properly
-            self._setup_student_repo(gt_student_id=gt_student_id, should_pull=should_pull)
+            self._setup_student_repo(gt_username=gt_username, should_pull=should_pull)
 
             # Only check commit ID validity with GitHub timestamp
             if self._is_commit_present(
@@ -238,11 +257,11 @@ class Submissions(object):
                 self._check_commitID(
                   current_assignment=current_assignment,
                   assignment_code=assignment_code,
-                  gt_student_id=gt_student_id)
+                  gt_username=gt_username)
 
                 self._compare_timestamp_github(
                   current_assignment=current_assignment,
-                  gt_student_id=gt_student_id, deadline=deadline)
+                  gt_username=gt_username, deadline=deadline)
 
             # Check T-Square timestamp against deadline
             self._compare_timestamp_t_square(
@@ -251,12 +270,17 @@ class Submissions(object):
 
             # Reset the repo ptr to master if needed
             #repo_suffix = self._get_correct_reference_id(
-            #  graded_id=gt_student_id)
+            #  graded_id=gt_username)
             #self._execute_command(
             #  'cd %s; git checkout master &> /dev/null' %
             #  self._gen_prefixed_dir(prefix_str=repo_suffix))
 
             # Save Result
+            if self._should_process_team_submissions(assignment_code) and platform_id != '-1':
+                # save records for team on the submitters record; we need to pull this from existing records since team submissions don't need it
+                current_student['gt_id'] = student_records[platform_id]['gt_id']
+                current_student['name'] = student_records[platform_id]['name']
+
             student_records[platform_id] = current_student
 
 
@@ -482,19 +506,19 @@ class Submissions(object):
         logger.info("\n".join(str_buffer))
 
 
-    def _setup_student_repo(self, gt_student_id, should_pull=True):
+    def _setup_student_repo(self, gt_username, should_pull=True):
         r"""
         Checks if the student Git repo is downloaded and cleans it up for the
         grader.
 
         Assignment:
-          gt_student_id:   (str) The student ID we will use download the repo.
+          gt_username:   (str) The student ID we will use download the repo.
 
         """
 
 
         just_cloned_repo = None
-        repo_suffix = self._get_correct_reference_id(graded_id=gt_student_id)
+        repo_suffix = self._get_correct_reference_id(graded_id=gt_username)
 
         if not os.path.isdir(self._gen_prefixed_dir(prefix_str=repo_suffix)):
 
@@ -536,12 +560,12 @@ class Submissions(object):
             try:
                 print("%s: student '%s' subprocess.CalledProcessError: %s\n" % (
                   inspect.currentframe().f_code.co_name,
-                  gt_student_id, str(error.output)))
+                  gt_username, str(error.output)))
 
             except UnicodeDecodeError:
                 print(("%s: student '%s' subprocess.CalledProcessError: "
                        "UnicodeDecodeError\n") % (
-                         inspect.currentframe().f_code.co_name, gt_student_id))
+                         inspect.currentframe().f_code.co_name, gt_username))
 
 
     def _execute_command(self, command):
@@ -658,6 +682,45 @@ class Submissions(object):
             except IOError:
                 raise IOError("create_team_json couldn\'t find file with name %s" % input_filename)
 
+    def _get_group_submission_platform_id(self, submission_folder_name, group, team_members, student_aliases):
+        r"""
+        Finds the platform ID for a valid group submission, if one exists. If none exists, returns -1.
+
+        :param submission_folder_name: name of the folder where submissions are kept, like ./submissions/T_DO
+        :param group: group name - like TeamXX
+        :param team_members: dictionary containing the names of the members of a group
+        :param student_aliases: dictionary indexed by gt_username that stores platform IDs
+        :return: valid platform ID for group submission
+        """
+        base_directory = self._get_submission_folder(submission_folder_name, group)
+        platform_id = "-1"
+        for temp_student_name in team_members[group]:
+            try:
+                student_platform_id = student_aliases[temp_student_name]
+            except KeyError:
+                continue # student dropped
+
+            filename_candidate = os.path.join(base_directory, self._get_submission_file_name(group.lower(), student_platform_id))
+
+            try:
+                with open(filename_candidate, 'r'):
+                    platform_id = student_platform_id  # found it!
+                    break
+            except IOError:
+                try:
+                    # try late submission
+                    filename_candidate = os.path.join(base_directory, self._get_submission_file_name(group.lower(), student_platform_id, True))
+
+                    with open(filename_candidate, 'r'):
+                        platform_id = student_platform_id
+                except IOError:
+                    pass
+
+        if platform_id == "-1":  # not fatal so other submissions can be processed.
+            print("No valid filename found for %s. Tried students %s: " % (group, team_members[group]))
+
+        return platform_id
+
     def _get_correct_reference_id(self, graded_id):
         r"""
         Depending on which submission type, converts it to the correct ID
@@ -674,7 +737,7 @@ class Submissions(object):
         """
 
 
-        if self.is_team:
+        if self.is_team and graded_id.find("Team") != 0:
 
             team_records = self._get_file_dict(
               filename=self.TEAM_RECORDS_FILENAME,
@@ -733,7 +796,7 @@ class Submissions(object):
         return file_dict
 
 
-    def _get_student_folders(self, submission_folder_name, student_whitelist):
+    def _get_student_folders(self, submission_folder_name, student_whitelist, assignment_code):
         r"""
         Get a list of student repos that we will grade.
 
@@ -765,14 +828,17 @@ class Submissions(object):
               filename=self.TEAM_MEMBERS_FILENAME,
               caller_name=inspect.currentframe().f_code.co_name)
 
-            # Read data in student_whitelist
-            student_whitelist_multi_list = [team_records[team] for team in student_whitelist]
+            if not self._should_process_team_submissions(assignment_code):
+                # T-Square doesn't process groups - it requires individual student submissions. Convert Team list to Student list here.
+                # Read data in student_whitelist
+                student_whitelist_multi_list = [team_records[team] for team in student_whitelist]
 
-            # Flatten multi list to be a single list and store it back
-            student_whitelist = list(
-              itertools.chain.from_iterable(student_whitelist_multi_list))
+                # Flatten multi list to be a single list and store it back
+                student_whitelist = list(
+                  itertools.chain.from_iterable(student_whitelist_multi_list))
 
-            # student_whitelist now contains student GTIDs instead of team names
+                # student_whitelist now contains student GTIDs instead of team names
+
 
         student_aliases = self._get_file_dict(
           filename=self.STUDENT_ALIAS_FILENAME,
@@ -785,29 +851,31 @@ class Submissions(object):
 
         folders = []
 
+        if self._should_process_team_submissions(assignment_code):
+            folders = student_whitelist
+        else:
+            for student in student_whitelist:
 
-        for student in student_whitelist:
+                try:
+                    platform_id = student_aliases[student]
+                    name = student_records[platform_id]['name']
 
-            try:
-                platform_id = student_aliases[student]
-                name = student_records[platform_id]['name']
+                except KeyError:
+                    error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (
+                        student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
 
-            except KeyError:
-                error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (
-                    student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
+                    if self.is_team:
+                        print(error_message)  # dropped students shouldn't be fatal in team grading
+                        continue  # don't append student to folders
+                    else:
+                        raise ValueError(error_message)  # dropped students should be fatal in normal grading
 
-                if self.is_team:
-                    print(error_message)  # dropped students shouldn't be fatal in team grading
-                    continue  # don't append student to folders
-                else:
-                    raise ValueError(error_message)  # dropped students should be fatal in normal grading
+                except IndexError:
+                    logger.error(
+                      "Couldn't get folder name for student with GTID %s\n",
+                      student)
 
-            except IndexError:
-                logger.error(
-                  "Couldn't get folder name for student with GTID %s\n",
-                  student)
-
-            folders.append('%s(%s)' % (name, platform_id))
+                folders.append('%s(%s)' % (name, platform_id))
 
         return folders
 
@@ -831,7 +899,7 @@ class Submissions(object):
 
 
     def _check_commitID(self, current_assignment,
-                        assignment_code, gt_student_id):
+                        assignment_code, gt_username):
         r"""
         Checks if the current commit is a valid comment in the Repo.
 
@@ -846,13 +914,13 @@ class Submissions(object):
           assignment_code:   (str) This is the two letter name for the
             assignment.
 
-          gt_student_id:   (str) This is a student's ID what we will grab
+          gt_username:   (str) student GT username - this is what he or she would log into GitHub with
           the info of.
 
         """
 
 
-        repo_suffix = self._get_correct_reference_id(graded_id=gt_student_id)
+        repo_suffix = self._get_correct_reference_id(graded_id=gt_username)
 
         command = (
           'cd %s; git checkout %s; git tag -f %s &> /dev/null;'
@@ -889,10 +957,11 @@ class Submissions(object):
 
         return folder_name
 
-    def _get_submission_file_name(self, current_student, platform_id, late=False):
+    # TODO: current_student gets replaced with student_name (str, rather than object)
+    def _get_submission_file_name(self, student_name, platform_id, late=False):
         r"""
         Get the name of the file to pull submission text from.
-        :param current_student: GT ID of student
+        :param student_name: GT ID of student (string)
         :param platform_id: student identifier (differs per platform)
         :return:
         """
@@ -900,9 +969,9 @@ class Submissions(object):
         if self.PLATFORM == "TSQUARE":
             current_submission_file = (
                     '%s(%s)_submissionText.html' % (
-                current_student['name'], platform_id))
+                student_name, platform_id))
         elif self.PLATFORM == "CANVAS":
-            name = current_student['name'].replace(",", "").replace(" ", "").replace("-", "").replace(".", "").replace("'", "").lower()
+            name = student_name.replace(",", "").replace(" ", "").replace("-", "").replace(".", "").replace("'", "").lower()
 
             label = ""
             if late:
@@ -915,7 +984,7 @@ class Submissions(object):
         return current_submission_file
 
     def _check_submission_file(self, current_assignment,
-                               base_directory, submission_file, current_student, platform_id, tried_late=False):
+                               base_directory, submission_file, student_name, platform_id, tried_late=False):
         r"""
         This checks the submission file and see there is a valid commit.
 
@@ -950,8 +1019,8 @@ class Submissions(object):
 
         except IOError:
             if self.PLATFORM == "CANVAS" and not tried_late:
-                submission_file = self._get_submission_file_name(current_student, platform_id, late=True)
-                self._check_submission_file(current_assignment, base_directory, submission_file, current_student, platform_id, tried_late=True)
+                submission_file = self._get_submission_file_name(student_name, platform_id, late=True)
+                self._check_submission_file(current_assignment, base_directory, submission_file, student_name, platform_id, tried_late=True)
             else:
                 current_assignment['commitID'] = self.STR_MISSING
 
@@ -994,7 +1063,7 @@ class Submissions(object):
 
 
     def _compare_timestamp_github(self, current_assignment,
-                                  gt_student_id, deadline):
+                                  gt_username, deadline):
         r"""
         This parses the timestamp on Github and compares it to see if the commit
         is late.
@@ -1005,8 +1074,7 @@ class Submissions(object):
           current_assignment:   (dict) This is the current assignment we are
             checking the timestamp of.
 
-          gt_student_id:   (str) The student ID we will use to get the
-            timestamp.
+          gt_username:   (str) The student username we will use to get the timestamp.
 
           deadline:   (str) This is the deadline of the assignment if it is
             late. The input must be in strict ISO 8601 format
@@ -1025,7 +1093,7 @@ class Submissions(object):
         else:
 
             repo_suffix = self._get_correct_reference_id(
-              graded_id=gt_student_id)
+              graded_id=gt_username)
 
             # check timestamp of GitHub commit
             command = (
@@ -1054,7 +1122,7 @@ class Submissions(object):
           current_assignment:   (dict) This is the current assignment we are
             checking the timestamp of.
 
-          gt_student_id:   (str) The student ID we will use to get the
+          gt_username:   (str) The student ID we will use to get the
             timestamp.
 
           deadline:   (str) This is the deadline of the assignment if it is
@@ -1156,6 +1224,15 @@ class Submissions(object):
         else:
             return time_obj - timedelta(hours=hour, minutes=minute)
 
+
+    def _should_process_team_submissions(self, assignment_code):
+        r"""
+        T-Square and Canvas process groups differently - T-Square doesn't look at teams, and Canvas does.
+        However, D0 for group projects is individual, and D1-4 are teams.
+        :return: Boolean - whether or not we should use <team>_<platform_id>_text.html submission files
+        """
+
+        return self.is_team and self.PLATFORM == "CANVAS" and assignment_code != "T0"
 
     def _should_pull_repo(self, team_number, should_pull=True):
         r"""
