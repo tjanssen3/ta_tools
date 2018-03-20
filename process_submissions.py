@@ -368,7 +368,7 @@ class Submissions(object):
                 _, most_recent_commit = commit_list[0]
 
                 command = (
-                  'cd %s; git checkout %s &> /dev/null; git tag %s &> /dev/null' % (
+                  'cd %s; git checkout %s &> /dev/null; git tag -f %s &> /dev/null' % (
                     self._gen_prefixed_dir(team), most_recent_commit,
                     assignment_code))
 
