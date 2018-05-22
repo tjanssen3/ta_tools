@@ -412,7 +412,7 @@ class Submissions(object):
           epilog="Run process_repos first.")
 
 
-        bad_commit, late_github, late_submission, missing = [], [], [], []
+        bad_commit, late_github, late_submission, missing, not_in_json = [], [], [], [], []
 
         _init_log(log_filename=report_filename)
         logger.info("Report: %s\n", assignment)
@@ -453,6 +453,7 @@ class Submissions(object):
           'commitID valid': (False, bad_commit)
         }
 
+        not_in_json = []  # bad_student_dict assumes a student was found; this will track students not in JSON files
 
         for student in final_list:
 
@@ -465,12 +466,12 @@ class Submissions(object):
             try:
                 student_info = student_records[student_aliases[student]]
             except KeyError:
-                error_message = "%s not found in %s - check the gradebook to see if they dropped or added late. If they dropped, remove from your grading list. If they added late, you may need to update %s - raise this issue with the TA group." % (
-                    student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME)
                 if self.is_team:
                     continue
                 else:
-                    raise (error_message)
+                    print("Couldn't find student %s in %s. %s may need to be updated." % (student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME))
+                    not_in_json.append(student)
+                    continue
 
             if assignment not in student_info:
 
@@ -499,7 +500,8 @@ class Submissions(object):
         for fmt_str, data in [("\tSubmission (%d): %s", late_submission),
                               ("\tGitHub (%d): %s", late_github),
                               ("\nMISSING SUBMISSIONS (%s): %s", missing),
-                              ("\nBAD COMMITS (%s):\n\t%s", bad_commit)]:
+                              ("\nBAD COMMITS (%s):\n\t%s", bad_commit),
+                              ("MISSING FROM JSON (%s):\n\t%s", not_in_json)]:
 
             str_buffer.append(fmt_str % (len(data), ", ".join(data)))
 
@@ -597,90 +599,85 @@ class Submissions(object):
 
     def create_student_json(self, input_filename, should_create_json_files=False):
         r"""
-        Converts the input file to two useful JSON files specifically
-        for student grading.
+        Converts the input file to two useful JSON files specifically for student grading.
 
         Arguments:
-          input_filename:   (str) The input filename we will parse into JSON
-            files.
-          should_create_json_files: (bool) whether or not we should create these files. Defaults to false.
+          input_filename:   (str) The input filename we will parse into JSON files.
 
+        Returns: None
         """
 
-        if should_create_json_files:
-            try:
+        try:
+            with open(input_filename, 'r') as input_file:
 
-                with open(input_filename, 'r') as input_file:
+                gt_id_dict, student_records = {}, {}
 
-                    gt_id_dict, student_records = {}, {}
+                for line in input_file:
 
-                    for line in input_file:
+                    parsed_line = line.strip().split('\t')
 
-                        parsed_line = line.strip().split('\t')
+                    try:
+                        if self.PLATFORM == "TSQUARE":
+                            name, gt_id, platform_id = parsed_line[0:3]
+                        elif self.PLATFORM == "CANVAS":
+                            name, platform_id, gt_id = parsed_line[0:3]
+                        else:
+                            raise TypeError("create_student_json error! Currently selected platform %s isn't supported yet! Valid platforms are %s" % (self.PLATFORM, self.PLATFORMS_VALID))
+                    except ValueError:
+                        print("Malformed input not added: %s" % str(parsed_line))
+                        continue # just skip malformed input
 
-                        try:
-                            if self.PLATFORM == "TSQUARE":
-                                name, gt_id, platform_id = parsed_line[0:3]
-                            elif self.PLATFORM == "CANVAS":
-                                name, platform_id, gt_id = parsed_line[0:3]
-                            else:
-                                raise TypeError("create_student_json error! Currently selected platform %s isn't supported yet! Valid platforms are %s" % (self.PLATFORM, self.PLATFORMS_VALID))
-                        except ValueError:
-                            print("Malformed input not added: %s" % str(parsed_line))
-                            continue # just skip malformed input
+                    student_records[platform_id] = {
+                      'name': name, 'gt_id': gt_id}
+                    gt_id_dict[gt_id] = platform_id
 
-                        student_records[platform_id] = {
-                          'name': name, 'gt_id': gt_id}
-                        gt_id_dict[gt_id] = platform_id
-
-            except IOError:
-                raise IOError(
-                  "%s: Missing file '%s'. Exiting." % (
-                    inspect.currentframe().f_code.co_name, input_filename))
+        except IOError:
+            raise IOError(
+              "%s: Missing file '%s'. Exiting." % (
+                inspect.currentframe().f_code.co_name, input_filename))
 
 
-            with open(self.STUDENT_RECORDS_FILENAME, 'w') as output_file:
-                json.dump(student_records, output_file)
-            with open(self.STUDENT_ALIAS_FILENAME, 'w') as alias_file:
-                json.dump(gt_id_dict, alias_file)
+        with open(self.STUDENT_RECORDS_FILENAME, 'w') as output_file:
+            json.dump(student_records, output_file)
+        with open(self.STUDENT_ALIAS_FILENAME, 'w') as alias_file:
+            json.dump(gt_id_dict, alias_file)
 
-    def create_team_json(self, input_filename, should_create_json_files=False):
+    def create_team_json(self, input_filename):
         r"""
         Create the JSON files required for processing team submissions.
 
         :param input_filename: filename that will have all required information parsed out of it. Requires format "<GTID>\t<Grader>\t\<Team#>"; the <Grader> section is unused, but left in so this information can be copied directly from the gradebook.
-        :param should_create_json_files: Boolean. Passing True will create the team JSON files, passing False will skip all functionality.
-        :return:
+
+        :return: None
         """
-        if should_create_json_files:
-            try:
-                with open(input_filename, 'r') as input_file:
-                    students = {}  # what team is a student in?
-                    teams = {}  # what students are in a team?
-                    for line in input_file:
-                        line = line.strip()
-                        parsed = line.split('\t')
+        try:
+            with open(input_filename, 'r') as input_file:
+                students = {}  # what team is a student in?
+                teams = {}  # what students are in a team?
+                for line in input_file:
+                    line = line.strip()
+                    parsed = line.split('\t')
 
-                        GT_username = parsed[0]
-                        try:
-                            team = parsed[2]
-                        except IndexError:
-                            team = "None"
+                    GT_username = parsed[0]
+                    try:
+                        team = parsed[2]
+                    except IndexError:
+                        team = "None"
 
-                        students[GT_username] = team  # store student's team
+                    students[GT_username] = team  # store student's team
 
-                        if team not in teams:
-                            teams[team] = []
-                        teams[team].append(GT_username)  # put student on list of team members
+                    if team not in teams:
+                        teams[team] = []
+                    teams[team].append(GT_username)  # put student on list of team members
 
-                # save here
-                with open(self.TEAM_RECORDS_FILENAME, 'w') as student_teams_file:
-                    json.dump(students, student_teams_file)
-                with open(self.TEAM_MEMBERS_FILENAME, 'w') as team_members_file:
-                    json.dump(teams, team_members_file)
+            # save here
+            with open(self.TEAM_RECORDS_FILENAME, 'w') as student_teams_file:
+                json.dump(students, student_teams_file)
+            with open(self.TEAM_MEMBERS_FILENAME, 'w') as team_members_file:
+                json.dump(teams, team_members_file)
 
-            except IOError:
-                raise IOError("create_team_json couldn\'t find file with name %s" % input_filename)
+        except IOError:
+            raise IOError("create_team_json couldn\'t find file with name %s" % input_filename)
 
     def _get_group_submission_platform_id(self, submission_folder_name, group, team_members, student_aliases):
         r"""
@@ -868,7 +865,7 @@ class Submissions(object):
                         print(error_message)  # dropped students shouldn't be fatal in team grading
                         continue  # don't append student to folders
                     else:
-                        raise ValueError(error_message)  # dropped students should be fatal in normal grading
+                        continue
 
                 except IndexError:
                     logger.error(

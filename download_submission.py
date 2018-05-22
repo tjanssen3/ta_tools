@@ -68,8 +68,11 @@ def process_assignment(
                               should_pull_repo_flag=should_pull_repo_flag)
 
     # Optionally create JSON files, otherwise skip. Access this with -j input argument.
-    submissions.create_student_json('students_full.txt', should_create_json_files)
-    submissions.create_team_json('teams_full.txt', is_team and should_create_json_files)  # don't try to create team JSONs at the beginning; teams are not normally available at semester start
+    if should_create_json_files:
+        submissions.create_student_json('students_full.txt')
+
+    if should_create_json_files and is_team:
+        submissions.create_team_json('teams_full.txt')  # don't try to create team JSONs at the beginning; teams are not normally available at semester start
 
     submissions.process_repos(
       submission_folder_name=('./submissions/%s' % assignment_name),

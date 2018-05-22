@@ -77,7 +77,7 @@ class TestSubmissions(TestCase):
         bad_filename = ""
 
         try:
-            self.submissions_individual.create_student_json(bad_filename, should_create_json_files=True)
+            self.submissions_individual.create_student_json(bad_filename)
 
             self.fail("create_student_json somehow worked with bad filename %s" % bad_filename)
         except OSError:
@@ -87,7 +87,7 @@ class TestSubmissions(TestCase):
         # remove files if they currently exist
         self.delete_test_files(student_records=True)
 
-        self.submissions_individual.create_student_json(self.filenames["info_students"], should_create_json_files=True)
+        self.submissions_individual.create_student_json(self.filenames["info_students"])
 
         try:
             with open(self.filenames["student_records"]) as records:
@@ -99,7 +99,7 @@ class TestSubmissions(TestCase):
         # remove files if they currently exist
         self.delete_test_files(student_aliases=True)
 
-        self.submissions_individual.create_student_json(self.filenames["info_students"], should_create_json_files=True)
+        self.submissions_individual.create_student_json(self.filenames["info_students"])
 
         try:
             with open(self.filenames["student_aliases"]) as aliases:
@@ -111,7 +111,7 @@ class TestSubmissions(TestCase):
         # remove files if they currently exist
         self.delete_test_files(team_records=True)
 
-        self.submissions_individual.create_team_json(self.filenames["info_teams"], should_create_json_files=True)
+        self.submissions_individual.create_team_json(self.filenames["info_teams"])
 
         try:
             with open(self.filenames["team_records"]) as records:
@@ -123,7 +123,7 @@ class TestSubmissions(TestCase):
         # remove files if they currently exist
         self.delete_test_files(team_members=True)
 
-        self.submissions_individual.create_team_json(self.filenames["info_teams"], should_create_json_files=True)
+        self.submissions_individual.create_team_json(self.filenames["info_teams"])
 
         try:
             with open(self.filenames["team_members"]) as records:
@@ -135,7 +135,7 @@ class TestSubmissions(TestCase):
         bad_filename = ""
 
         try:
-            self.submissions_individual.create_team_json(bad_filename, should_create_json_files=True)
+            self.submissions_individual.create_team_json(bad_filename)
 
             self.fail("create_tean_json somehow worked with bad filename %s" % bad_filename)
         except OSError:
