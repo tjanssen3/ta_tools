@@ -471,6 +471,7 @@ class Submissions(object):
                 else:
                     print("Couldn't find student %s in %s. %s may need to be updated." % (student, self.STUDENT_ALIAS_FILENAME, self.STUDENT_ALIAS_FILENAME))
                     not_in_json.append(student)
+                    logger.info("\tMissing in JSON files")
                     continue
 
             if assignment not in student_info:
