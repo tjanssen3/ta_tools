@@ -42,7 +42,7 @@ class Submissions(object):
     """
 
 
-    def __init__(self, is_team, should_pull_repo_flag):
+    def __init__(self, is_team, should_pull_repo_flag, folder_prefix="6300Spring18", git_context="gt-omscs-se-2018-spring", edtech_platform="CANVAS"):
         r"""
         Defines the variables for the current class.
 
@@ -65,8 +65,8 @@ class Submissions(object):
         self.T_SQUARE_DATETIME_PATTERN = '%Y%m%d%H%M%S'
 
         # Constants for the class
-        self.FOLDER_PREFIX = '6300Spring18'
-        self.GIT_CONTEXT = 'gt-omscs-se-2018spring'
+        self.FOLDER_PREFIX = folder_prefix
+        self.GIT_CONTEXT = git_context
 
         self.STUDENT_RECORDS_FILENAME = 'student_records.json'
         self.STUDENT_ALIAS_FILENAME = 'student_aliases.json'
@@ -75,7 +75,7 @@ class Submissions(object):
         self.TIMESTAMP_FILENAME = 'timestamp.txt'
 
         self.MAIN_REPO_DIR = 'student_repo'
-        self.PLATFORM = "CANVAS"
+        self.PLATFORM = edtech_platform
         self.PLATFORMS_VALID = ["CANVAS", "TSQUARE"]
         self.ENCODING = "utf-8"
 

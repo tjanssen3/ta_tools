@@ -24,8 +24,8 @@ Do not forget about datetime's isoformat to get this result!
 
 
 __all__ = ["get_assignment_info", "process_assignment", ]
-__author__ = "David Tran, Travis Janssen"
-__credits__ = ["David Tran", "Travis Janssen"]
+__author__ = "Travis Janssen, David Tran"
+__credits__ = ["Travis Janssen", "David Tran"]
 __status__ = "Production"
 __version__ = "1.0.0"
 
