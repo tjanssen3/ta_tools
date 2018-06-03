@@ -23,13 +23,13 @@ class TestSubmissions(TestCase):
     def setup_test_filenames(self):
         self.filenames = {}
 
-        self.filenames["info_students"] = "test_students_full.txt"
-        self.filenames["info_teams"] = "test_teams_full.txt"
+        self.filenames["info_students"] = "testing/test_students_full.txt"
+        self.filenames["info_teams"] = "testing/test_teams_full.txt"
 
-        self.filenames["student_records"] = "test_student_records.json"
-        self.filenames["student_aliases"] = "test_student_aliases.json"
-        self.filenames["team_records"] = "test_team_records.json"
-        self.filenames["team_members"] = "test_team_members.json"
+        self.filenames["student_records"] = "testing/test_student_records.json"
+        self.filenames["student_aliases"] = "testing/test_student_aliases.json"
+        self.filenames["team_records"] = "testing/test_team_records.json"
+        self.filenames["team_members"] = "testing/test_team_members.json"
 
     def setup_test_filenames_on_object(self, temp):
         temp.STUDENT_RECORDS_FILENAME = self.filenames["student_records"]
