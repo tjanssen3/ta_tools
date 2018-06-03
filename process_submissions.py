@@ -42,7 +42,7 @@ class Submissions(object):
     """
 
 
-    def __init__(self, is_team, should_pull_repo_flag, folder_prefix="6300Spring18", git_context="gt-omscs-se-2018-spring", edtech_platform="CANVAS"):
+    def __init__(self, is_team, should_pull_repo_flag, folder_prefix="6300Spring18", git_context="gt-omscs-se-2018spring", edtech_platform="CANVAS"):
         r"""
         Defines the variables for the current class.
 
@@ -161,9 +161,12 @@ class Submissions(object):
         # Guarantee that we will process something if we have an empty list
         if not student_whitelist:
 
-            student_aliases = self._get_file_dict(
-              filename=self.STUDENT_ALIAS_FILENAME,
-              caller_name=inspect.currentframe().f_code.co_name)
+            if self.is_team:
+                student_aliases = self._get_file_dict(filename=self.TEAM_MEMBERS_FILENAME, caller_name=inspect.currentframe().f_code.co_name)
+            else:
+                student_aliases = self._get_file_dict(
+                  filename=self.STUDENT_ALIAS_FILENAME,
+                  caller_name=inspect.currentframe().f_code.co_name)
 
             student_whitelist = student_aliases.keys() # Get all students
 
@@ -425,6 +428,9 @@ class Submissions(object):
 
             new_student_list = []
 
+            if student_list == None:
+                student_list = self._get_file_dict(filename=self.TEAM_MEMBERS_FILENAME, caller_name=inspect.currentframe().f_code.co_name).keys()
+
             for team in student_list:
 
                 members_list = team_records[team]
@@ -522,10 +528,14 @@ class Submissions(object):
         just_cloned_repo = None
         repo_suffix = self._get_correct_reference_id(graded_id=gt_username)
 
-        if not os.path.isdir(self._gen_prefixed_dir(prefix_str=repo_suffix)):
+        if repo_suffix == None:
+            return  # bad suffix - don't process
 
-            command = ('cd %s; '
-                       'git clone https://github.gatech.edu/%s/%s%s.git; '
+        if not os.path.isdir(self._gen_prefixed_dir(prefix_str=repo_suffix)):
+            __ = self._execute_command("pwd")
+
+            command = ('cd %s && '
+                       'git clone https://github.gatech.edu/%s/%s%s.git && '
                        'cd ..') % (
                          self.MAIN_REPO_DIR, self.GIT_CONTEXT,
                          self.FOLDER_PREFIX, repo_suffix)
@@ -546,11 +556,11 @@ class Submissions(object):
 
             if self._should_pull_repo(repo_suffix, should_pull) or just_cloned_repo:
 
-                pull_flag = 'git pull origin master -a; '
+                pull_flag = 'git pull origin master -a && '
 
             command = (
-              ('cd %s; %s'
-               'git reset --hard; cd - &> /dev/null') % (
+              ('cd %s && %s'
+               'git reset --hard && cd - &> /dev/null') % (
                  self._gen_prefixed_dir(prefix_str=repo_suffix), pull_flag))
 
             _ = self._execute_command(command=command)
@@ -591,8 +601,11 @@ class Submissions(object):
             # Windows doesn't support 'go back to last directory'
             command = command.replace('& cd -', '')
 
-        raw_info = subprocess.check_output(command, shell=True).strip()
-        info = raw_info.decode(self.ENCODING)
+        try:
+            raw_info = subprocess.check_output(command, shell=True).strip()
+            info = raw_info.decode(self.ENCODING)
+        except subprocess.CalledProcessError:
+            info = "failed"
 
         return info
 
@@ -747,6 +760,9 @@ class Submissions(object):
                 raise IndexError(
                   "%s: Couldn't find team for student with GTID '%s'. Exiting."
                   % (inspect.currentframe().f_code.co_name, graded_id))
+            except KeyError:
+                logger.error("%s: Couldn't find team for student with GTID '%s'. Exiting.\n", inspect.currentframe().f_code.co_name, graded_id)
+                team_id = None
 
             return team_id
 
