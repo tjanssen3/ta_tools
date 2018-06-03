@@ -1,5 +1,7 @@
+from datetime import datetime, timedelta
 from unittest import TestCase
 
+import datetime
 import os
 import process_submissions
 
@@ -8,13 +10,9 @@ class TestSubmissions(TestCase):
         # save filenames so we can use elsewhere
         self.setup_test_filenames()
 
-        # TODO: set up github.gatech.edu/tjanssen3/6300ta_tools_test public projects with fake data in them
-        temp_individual = process_submissions.Submissions(is_team=False, should_pull_repo_flag=False)
-        temp_team = process_submissions.Submissions(is_team=True, should_pull_repo_flag=False)
-
         # set up temp filenames so tests don't conflict with production data
-        self.submissions_individual = self.setup_test_filenames_on_object(temp_individual)
-        self.submissions_team = self.setup_test_filenames_on_object(temp_team)
+        self.submissions_individual = self.setup_test_filenames_on_object(process_submissions.Submissions(is_team=False, should_pull_repo_flag=False))
+        self.submissions_team = self.setup_test_filenames_on_object(process_submissions.Submissions(is_team=True, should_pull_repo_flag=False))
 
     def tearDown(self):
         should_delete_files = True
@@ -140,3 +138,56 @@ class TestSubmissions(TestCase):
             self.fail("create_tean_json somehow worked with bad filename %s" % bad_filename)
         except OSError:
             pass
+
+class TestTimestamp(TestCase):
+    def setUp(self):
+        # made a public repo with dummy info here: https://github.com/tjanssen3/6300afakestudent
+        git_domain = "github.com"
+        git_context = "tjanssen3"
+        folder_prefix = "6300"
+        test_student = "afakestudent"
+
+        TestSubmissions.setup_test_filenames(self)
+        self.submissions = TestSubmissions.setup_test_filenames_on_object(self, process_submissions.Submissions(is_team=False, should_pull_repo_flag=True,
+                                                                                                                folder_prefix=folder_prefix, git_context=git_context, git_domain=git_domain))
+        self.submissions.create_student_json(self.filenames["info_students"])
+
+        # current assignment
+        self.info = {}
+        self.info["current_assignment"] = {'Timestamp Submission': 'Ok',
+                                           'commitID valid': True,
+                                           'commitID': 'f556b4ba7e222de302b367b1dceeff89bd233191'}
+        self.info["gt_username"] = 'afakestudent'
+        self.info["deadline"] = '2018-02-24 12:00:00'
+
+        assignment_name = "A3"
+        student_whitelist = [test_student]
+
+        # see if testing info exists already; if not, pull from public repo
+        should_pull = not os.path.isdir("./student_repo/%s%s" % (folder_prefix, test_student))
+
+        self.submissions.process_repos(
+            submission_folder_name=('./testing/%s' % assignment_name),
+            deadline=self.info["deadline"],
+            assignment_code=assignment_name,
+            student_whitelist=student_whitelist,
+            should_pull=should_pull)
+
+        self.info['deadline'] = self.submissions._get_output_timestamp(test_student, self.info['current_assignment'])
+
+
+    def tearDown(self):
+        pass
+
+    def test_GitHub_on_time(self):
+        # case: student committed exactly at deadline
+        self.submissions._compare_timestamp_github(self.info["current_assignment"], self.info["gt_username"], self.info["deadline"])
+
+        self.assertEqual(self.info["current_assignment"]['Submission GitHub'], self.submissions.STR_OK, "Timestamp Github should be on time!")
+
+    def test_GitHub_late(self):
+        # case: student committed an hour late
+        deadline = (datetime.datetime.strptime(self.info["deadline"], self.submissions.DATETIME_PATTERN) - timedelta(hours=1)).strftime(self.submissions.DATETIME_PATTERN)
+        self.submissions._compare_timestamp_github(self.info["current_assignment"], self.info["gt_username"], deadline)
+
+        self.assertEqual(self.info["current_assignment"]["Submission GitHub"], self.submissions.STR_LATE, "Timestamp GitHub should be late!")

@@ -14,8 +14,8 @@ TODO:
 
 
 __all__ = ["Submissions", ] # Controls what can be imported
-__author__ = "David Tran, Travis Janssen"
-__credits__ = ["David Tran", "Travis Janssen"]
+__author__ = "Travis Janssen, David Tran"
+__credits__ = ["Travis Janssen", "David Tran"]
 __status__ = "Production"
 __version__ = "1.0.0"
 
@@ -42,7 +42,7 @@ class Submissions(object):
     """
 
 
-    def __init__(self, is_team, should_pull_repo_flag, folder_prefix="6300Spring18", git_context="gt-omscs-se-2018spring", edtech_platform="CANVAS"):
+    def __init__(self, is_team, should_pull_repo_flag, folder_prefix="6300Spring18", git_context="gt-omscs-se-2018spring", edtech_platform="CANVAS", git_domain='github.gatech.edu'):
         r"""
         Defines the variables for the current class.
 
@@ -60,12 +60,13 @@ class Submissions(object):
 
 
         # Pattern Matching
-        self.DATETIME_PATTERN = '%Y-%m-%dT%H:%M:%S'
-        self.REGEX_PATTERN = '^[0-9]{4}(-[0-9]{2}){2}T[0-9]{2}(:[0-9]{2}){2}$'
+        self.DATETIME_PATTERN = '%Y-%m-%d %H:%M:%S'
+        self.REGEX_PATTERN = '^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}$'
         self.T_SQUARE_DATETIME_PATTERN = '%Y%m%d%H%M%S'
 
         # Constants for the class
         self.FOLDER_PREFIX = folder_prefix
+        self.GIT_DOMAIN = git_domain
         self.GIT_CONTEXT = git_context
 
         self.STUDENT_RECORDS_FILENAME = 'student_records.json'
@@ -535,10 +536,10 @@ class Submissions(object):
             __ = self._execute_command("pwd")
 
             command = ('cd %s && '
-                       'git clone https://github.gatech.edu/%s/%s%s.git && '
+                       'git clone https://%s/%s/%s%s.git && '
                        'cd ..') % (
-                         self.MAIN_REPO_DIR, self.GIT_CONTEXT,
-                         self.FOLDER_PREFIX, repo_suffix)
+                         self.MAIN_REPO_DIR,
+                         self.GIT_DOMAIN, self.GIT_CONTEXT, self.FOLDER_PREFIX, repo_suffix)
             _ = self._execute_command(command=command)
 
             self.cached_teams_pulled.add(repo_suffix)
@@ -1108,21 +1109,26 @@ class Submissions(object):
             repo_suffix = self._get_correct_reference_id(
               graded_id=gt_username)
 
-            # check timestamp of GitHub commit
-            command = (
-              'cd %s; git show -s --format=%%cI %s; cd - &> /dev/null' % (
-                self._gen_prefixed_dir(prefix_str=repo_suffix),
-                current_assignment['commitID']))
-
-            output_timestamp = self._execute_command(command=command)
-
-            dt_object = self._read_strict_ISO_format(time_str=output_timestamp)
-            timestamp_github = dt_object.strftime(self.DATETIME_PATTERN)
+            # check timestamp of GitHub commit. -s suppresses diff output, %cd = committer date, --date=iso-local: ISO format for local time
+            timestamp_github = self._get_output_timestamp(repo_suffix, current_assignment)
 
             # check GitHub timestamp against deadline
             current_assignment['Timestamp GitHub'] = timestamp_github
-            msg = self.STR_OK if timestamp_github < deadline else self.STR_LATE
+            msg = self.STR_OK if timestamp_github <= deadline else self.STR_LATE
             current_assignment['Submission GitHub'] = msg
+
+    def _get_output_timestamp(self, repo_suffix, current_assignment):
+        command = (
+                'cd %s && git show -s --format=%%cd --date=iso-local %s && cd - &> /dev/null' % (
+            self._gen_prefixed_dir(prefix_str=repo_suffix),
+            current_assignment['commitID']))
+
+        output_timestamp = self._execute_command(command=command)
+
+        dt_object = self._read_strict_ISO_format(time_str=output_timestamp)
+        timestamp = dt_object.strftime(self.DATETIME_PATTERN)
+
+        return timestamp
 
 
     def _compare_timestamp_t_square(self, current_assignment, deadline):
@@ -1223,19 +1229,8 @@ class Submissions(object):
         time_str = time_str.split("/")[0]  # may have suffix /<path>
 
         time_obj = datetime.strptime(time_str[:19], self.DATETIME_PATTERN)
-        positive_sign = hour = minute = 0
 
-        try:
-            positive_sign = 0 if time_str[20] == '-' else 1
-            hour, minute = map(int, time_str[21:].split(':'))
-
-        except IndexError:
-            pass
-
-        if positive_sign:
-            return time_obj + timedelta(hours=hour, minutes=minute)
-        else:
-            return time_obj - timedelta(hours=hour, minutes=minute)
+        return time_obj
 
 
     def _should_process_team_submissions(self, assignment_code):
