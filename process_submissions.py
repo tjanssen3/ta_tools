@@ -42,7 +42,7 @@ class Submissions(object):
     """
 
 
-    def __init__(self, is_team, should_pull_repo_flag, folder_prefix="6300Spring18", git_context="gt-omscs-se-2018spring", edtech_platform="CANVAS", git_domain='github.gatech.edu'):
+    def __init__(self, is_team, should_pull_repo_flag, folder_prefix="6300Summer18", git_context="gt-omscs-se-2018summer", edtech_platform="CANVAS", git_domain='github.gatech.edu'):
         r"""
         Defines the variables for the current class.
 

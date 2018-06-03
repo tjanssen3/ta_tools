@@ -1,0 +1,5 @@
+afakestudent	Alex	Team01
+bfakestudent	Alex	Team01
+cfakestudent	Will	Team02
+dfakestudent	Will	Team02
+efakestudent	Erin	Team03

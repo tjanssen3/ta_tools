@@ -40,7 +40,7 @@ For the purposes of this project, the assignment code is a two letter code AX or
 
 # Usage
 When you set up a new assignment for grading, you'll need these 2 things:
-1. Deadline (This is in UTC time (as Python 2.X doesn't handle timezones) and written in ISO 8601 format 'YYYY-MM-DDTHH:MM:SS')
+1. Deadline (This is in UTC time (as Python 2.X doesn't handle timezones) and written in ISO format 'YYYY-MM-DD HH:MM:SS')
 2. Assignment name (this is the same as the folder you extracted into 'submissions')
 3. (Optional) Your list of students to grade. If you don't specify a list, it'll download repos for the whole class.
 
@@ -50,7 +50,7 @@ The students should be their T-Square ID names with newlines between them and no
 Create/modify the python dictionary in download_submission.py
 ```
         'A2': {
-          'deadline' : '2017-09-02T12:05:00',
+          'deadline' : '2017-09-02 12:05:00',
           'assignment_name' : 'Assignment 2 Git usage'
           },
 ```
@@ -73,7 +73,7 @@ Full example, with convenience function:
 
 ```
         'D3': {
-          'deadline' : '2017-10-14T12:05:00',
+          'deadline' : '2017-10-14 12:05:00',
           'assignment_name' : 'Group Project, Deliverable 3',
           },
 ```
@@ -86,7 +86,8 @@ Team19
 
 Reports will be separated by team for convenience, and still print late, missing and invalid commit information as well.
 
-# Options (-p or --pull)
+# Options
+## Toggle pulling from GitHub: -p or --pull
 You can opt out of pulling from GitHub, which speeds up processing older assignments. This will use the files already on your system, if they exist. Use the -p or --pull argument to control this (defaults to True).
 
 Here's an example of how to used cached files (NOT pulling from GitHub) for A3:
@@ -94,7 +95,7 @@ Here's an example of how to used cached files (NOT pulling from GitHub) for A3:
     $ ./download_submission.py A3 -p False
 ```
 
-# Create JSONs (-j or --json_create)
+## Create JSONs: -j or --json_create
 If you need to update your JSON files (this is usually done only once or twice a semester), create a students_full.txt file and run with the -j input option. This will create student JSON files.
 
 Example for individual students:
