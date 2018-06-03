@@ -319,7 +319,7 @@ def parse_main(submission_target=None):
 
     # States if we will always pull from the Repo
     # None is auto, True is always, False is never
-    force_pull_flag = None
+    pull_from_github = None
     create_json_files = None
 
 
@@ -358,11 +358,11 @@ def parse_main(submission_target=None):
           )
 
         parser.add_argument(
-          '-f', '--force', #action='store_true',
+          '-p', '--pull', #action='store_true',
             choices=['True', 'False'],
           default=None,
          # type=bool,
-          dest='force_pull_flag',
+          dest='pull_from_github',
           help="overrides the default settings and always pull the repo",
           )
 
@@ -386,15 +386,15 @@ def parse_main(submission_target=None):
             assignment_name = assignment_name[0]
 
         # Sanitize inputs
-        force_pull_flag = args.force_pull_flag
+        pull_from_github = args.pull_from_github
 
         # is_team = True if assignment_name.startswith('T') else False
-        if force_pull_flag == "False":
-            force_pull_flag = False
-        elif force_pull_flag == 'True':
-            force_pull_flag = True
+        if pull_from_github == "False":
+            pull_from_github = False
+        elif pull_from_github == 'True':
+            pull_from_github = True
         else:
-            force_pull_flag = None
+            pull_from_github = None
 
         create_json_files = args.create_json_files
 
@@ -416,7 +416,7 @@ def parse_main(submission_target=None):
 
         assignment_info = get_assignment_info(
           assignment_name=assignment_name,
-          should_pull_repo_flag=force_pull_flag
+          should_pull_repo_flag=pull_from_github
           )
 
         if not assignment_info:
@@ -445,7 +445,7 @@ def parse_main(submission_target=None):
 
             assignment_info = get_assignment_info(
               assignment_name=assignment_code,
-              should_pull_repo_flag=force_pull_flag,
+              should_pull_repo_flag=pull_from_github,
               is_batch_run=True)
 
             if assignment_info:

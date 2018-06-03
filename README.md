@@ -86,19 +86,26 @@ Team19
 
 Reports will be separated by team for convenience, and still print late, missing and invalid commit information as well.
 
-# Options
- process_submissions.Submissions.process_repos also supports opting out of pulling from GitHub, which speeds up processing older assignments. This can be done in two ways.
+# Options (-p or --pull)
+You can opt out of pulling from GitHub, which speeds up processing older assignments. This will use the files already on your system, if they exist. Use the -p or --pull argument to control this (defaults to True).
 
-The first option is set the default setting in the function declaration:
+Here's an example of how to used cached files (NOT pulling from GitHub) for A3:
 ```
-    def get_assignment_info(assignment_name, should_pull_repo_flag=<VALUE>):
+    $ ./download_submission.py A3 -p False
 ```
 
-The second option is set the value when calling it
+# Create JSONs (-j or --json_create)
+If you need to update your JSON files (this is usually done only once or twice a semester), create a students_full.txt file and run with the -j input option. This will create student JSON files.
+
+Example for individual students:
 ```
-    assignment_info = get_assignment_info(assignment_name=assignment_name, should_pull_repo_flag=<VALUE>)
+    $ ./download_submission.py A3 -j True
 ```
-Note that the second option, if set **will** overrride the first option if used. So don't set both and pick one.
+
+Example for teams (you've just got to run it on a team assignment, rather than an individual one):
+```
+   $ ./download_submission.py T2 -j True
+```
 
 
 # Issues
