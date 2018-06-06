@@ -187,7 +187,7 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None,
         'assignment_name' : 'A2',
         },
       'A3': {
-        'deadline' : '2018-06-02 00:00:00',
+        'deadline' : '2018-06-03 00:00:00',
         'assignment_name' : 'A3',
         },
       'A4': {
@@ -199,7 +199,7 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None,
         'assignment_name' : 'A5',
         },
       'A6': {
-        'deadline' : '2018-06-30 00:00:00',
+        'deadline' : '2018-07-01 00:00:00',
         'assignment_name' : 'A6',
         },
       'A7': {
@@ -223,7 +223,7 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None,
         'assignment_name' : 'T_D0',
         },
       'T1': {
-        'deadline' : '2018-06-23 00:00:00',
+        'deadline' : '2018-06-24 00:00:00',
         'assignment_name' : 'T_D1',
         },
       'T2': {
