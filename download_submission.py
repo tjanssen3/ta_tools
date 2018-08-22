@@ -179,63 +179,63 @@ def get_assignment_info(assignment_name, should_pull_repo_flag=None,
     # Anywhere on Earth time is UTC-12. Worst case: UTC+12 (like Wake Island) --> midnight AoE = +2 days at midnight, so 1/26/2018 midnight = 1/28/2018 midnight
     assignment_dict = {
       'A1': {
-        'deadline' : '2018-05-22 03:59:00',
+        'deadline' : '2018-08-28 03:59:00',
         'assignment_name' : 'A1',
         },
       'A2': {
-        'deadline' : '2018-05-27 00:00:00',
+        'deadline' : '2018-09-02 00:00:00',
         'assignment_name' : 'A2',
         },
       'A3': {
-        'deadline' : '2018-06-03 00:00:00',
+        'deadline' : '2018-09-09 00:00:00',
         'assignment_name' : 'A3',
         },
       'A4': {
-        'deadline' : '2018-06-10 00:00:00',
+        'deadline' : '2018-09-16 00:00:00',
         'assignment_name' : 'A4',
         },
       'A5': {
-        'deadline' : '2018-06-17 00:00:00',
+        'deadline' : '2018-09-23 00:00:00',
         'assignment_name' : 'A5',
         },
       'A6': {
-        'deadline' : '2018-07-01 00:00:00',
+        'deadline' : '2018-10-28 00:00:00',
         'assignment_name' : 'A6',
         },
       'A7': {
-        'deadline' : '2018-07-08 00:00:00',
+        'deadline' : '2018-11-04 00:00:00',
         'assignment_name' : 'A7',
         },
       'I1': {
-        'deadline' : '2018-07-22 00:00:00',
+        'deadline' : '2018-11-11 00:00:00',
         'assignment_name' : 'I_D1',
         },
       'I2': {
-        'deadline' : '2018-07-29 00:00:00',
+        'deadline' : '2018-11-18 00:00:00',
         'assignment_name' : 'I_D2',
         },
       'I3': {
-        'deadline' : '2018-07-31 00:00:00',  # note: summer doesn't use I3
+        'deadline' : '2018-12-02 00:00:00',  # note: summer doesn't use I3
         'assignment_name' : 'I_D3',
         },
       'T0': {
-        'deadline' : '2018-06-17 00:00:00',
+        'deadline' : '2018-10-23 00:00:00',
         'assignment_name' : 'T_D0',
         },
       'T1': {
-        'deadline' : '2018-06-24 00:00:00',
+        'deadline' : '2018-10-30 00:00:00',
         'assignment_name' : 'T_D1',
         },
       'T2': {
-        'deadline' : '2018-07-01 00:00:00',
+        'deadline' : '2018-10-07 00:00:00',
         'assignment_name' : 'T_D2',
         },
       'T3': {
-        'deadline' : '2018-07-08 00:00:00',
+        'deadline' : '2018-10-14 00:00:00',
         'assignment_name' : 'T_D3',
         },
       'T4': {
-        'deadline' : '2018-07-15 00:00:00',
+        'deadline' : '2018-10-19 00:00:00',
         'assignment_name' : 'T_D4',
         },
       }
